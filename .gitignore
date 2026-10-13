@@ -26,3 +26,4 @@ seed-manifest.json
 
 # Written by scripts/model-spike.sh: measurements, never a key
 spike-results/
+run-results/
