@@ -1,6 +1,7 @@
 # Layered over Nkap's compose.yaml by scripts/observe.sh. It shortens the reconciler so an
-# unresolved payment escalates within seconds, and switches adjustments on. The request timeout
-# the demo already sets is left alone.
+# unresolved payment escalates within seconds. The request timeout the demo already sets is left
+# alone. Adjustments are switched on by observe.adjustments.compose.yaml, a separate file so the
+# off state can be observed by leaving it out.
 #
 # The one other change is the published host ports, 18080 and 18081 instead of 8080 and 8081,
 # so a run does not collide with a demo stack that is already up on the usual ones.
@@ -21,4 +22,3 @@ services:
       NKAP_RECONCILER_BACKOFF_BASE: PT1S
       NKAP_RECONCILER_BACKOFF_MAX: PT2S
       NKAP_RECONCILER_WINDOW: PT5S
-      NKAP_ADJUSTMENTS_ENABLED: "true"
