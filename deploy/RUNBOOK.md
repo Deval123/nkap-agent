@@ -152,6 +152,32 @@ in `tunnel run --help`; if it does not, do not use it.
 **Refreshing the others.** Choose the new tag, then get its digest from the registry and replace it in the file:
 `docker buildx imagetools inspect <image>:<tag> --format '{{.Manifest.Digest}}'`. Rebuild and run `scripts/verify-deploy.sh`.
 
+## The gateway is reached in clear text on the internal network
+
+**What is weakened.** The agent reaches the gateway over plain `http` at one named host (`NKAP_AGENT_INTERNAL_HOST=gateway`, the URL
+`http://gateway:8080`). The agent's key and the approver's key therefore cross the `internal` network **in clear text**, in the `Authorization` header of each request.
+Everywhere else the service insists on `https`, or on a loopback address.
+
+**What compensates.**
+
+- The `internal` network has no outbound access (`internal: true`): nothing on it can send what it sees anywhere, and no packet from it reaches the host's network.
+- Only the database, the simulator, the gateway and the agent are on it. `scripts/verify-deploy.sh` checks the list of containers attached to it, with the `client`
+  profile off.
+- Every one of them has all capabilities dropped (the database keeps the five its entrypoint needs and none of them is `NET_RAW`), so none can open a raw socket or
+  put an interface in promiscuous mode to read the others' traffic. `scripts/verify-deploy.sh` reads the capabilities of each running container on that network,
+  not the compose file, and fails if any holds `NET_RAW`.
+- The code accepts exactly one host name for plain `http`, never a pattern: one lower-case label that starts with a letter, with no dot, no upper-case letter, no IP address, no list
+  and no wildcard, compared to the address as text, whole. A second host, a dotted name, an uppercase name and an address are each refused, and tests say so.
+- The keys are the demo's own: they open this demo gateway and nothing else.
+
+**What would void the compensation.**
+
+- **Adding a container to `internal`.** Anything on that network can talk to the gateway and the agent, and could read what crosses it if it had the means.
+- **Giving any container on `internal` the `NET_RAW` capability** (or `NET_ADMIN`, or running one privileged or on the host's network), because it could then sniff the others' traffic.
+- Taking `internal: true` off the network, which also gives the gateway a way out.
+
+If you change `deploy/compose.demo.yaml`, run `scripts/verify-deploy.sh` before you start the stack.
+
 ## 8. What only you can check on the VPS
 
 `scripts/verify-deploy.sh` proves the structure on a laptop. These need the real machine and the real Cloudflare account:
@@ -165,6 +191,8 @@ in `tunnel run --help`; if it does not, do not use it.
 - **The metadata address is blocked from a container:** `docker run --rm --entrypoint curl curlimages/curl:8.11.1 -m 3 http://169.254.169.254/` must fail
   (use the pinned reference from `deploy/compose.demo.yaml`), after a reboot too.
 - Unattended upgrades have run (`/var/log/unattended-upgrades/`), and `docker inspect` shows the log rotation (10 MB, 3 files) on every container.
+- **Who is on `internal`:** `docker ps --filter network=nkap-agent-demo_internal --format '{{.Names}}'` lists the database, the simulator, the gateway and the agent, and nothing else, with the `tools`
+  profile off; and `docker exec <each> grep CapBnd /proc/1/status` shows no bit 0x2000 (`NET_RAW`).
 - Time: the daily budgets reset at midnight UTC, so the VPS clock must be right (`timedatectl`).
 
 ## 9. Live on, live off
