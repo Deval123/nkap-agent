@@ -181,6 +181,31 @@ class AgentLoopTest {
         assertThat(JSON.readTree(record.toJson()).get("outcome").get("droppedCitations").asInt()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("with the statement lines, the unrecorded fee is proposed citing /lines/0/feeMinor and accepted; the measured wrong entry is still refused")
+    void feeFromTheStatementLines() {
+        String csv = "operator_transaction_id,amount_minor,fee_minor,currency,occurred_at,status\n"
+                + "FT-UF-0001,5000,75,XAF,2026-10-13T10:00:00Z,SETTLED\n";
+        gateway.serve("/statements/imports/" + IMPORT, "{\"findings\":[{\"detail\":\"no payment holds FT-UF-0001; posted 5000 XAF\"}]}");
+        java.util.function.Function<Trace, AgentTools> withLines = trace -> new AgentTools(
+                new GatewayClient(gateway.url(), () -> KEY), DocsIndex.bundled(), id -> java.util.Optional.of(csv), trace);
+        EvidencePointer fee = new EvidencePointer("c2", "/lines/0/feeMinor");
+
+        ScriptedModel good = new ScriptedModel().then(call("get_payment", REF)).then(call("get_statement_lines", IMPORT))
+                .then(propose(Hypothesis.UNRECORDED_FEE, feeEntry(75), fee, new EvidencePointer("c1", "/provider")));
+        RunRecord accepted = new AgentLoop(good, limits).run(withLines, REF, IMPORT);
+        assertThat(proposed(accepted).proposal().evidence().get(0).value()).isEqualTo("75");
+        assertThat(gateway.requests).as("the lines are not read from the gateway").containsExactly("GET /payments/" + REF);
+
+        ModelAnswer.Final wrong = propose(Hypothesis.UNRECORDED_FEE,
+                List.of(new Posting(SUSPENSE, 75, C), new Posting(FEES, -75, C)), fee);
+        ScriptedModel bad = new ScriptedModel().then(call("get_payment", REF)).then(call("get_statement_lines", IMPORT))
+                .then(wrong).then(wrong);
+        RunRecord refused = new AgentLoop(bad, limits).run(withLines, REF, IMPORT);
+        assertThat(refused.outcome()).isInstanceOf(RunOutcome.Rejected.class);
+        assertThat(((RunOutcome.Rejected) refused.outcome()).violations()).extracting(Violation::code).containsExactly("pattern-mismatch");
+    }
+
     // --- the bounds
 
     @Test
