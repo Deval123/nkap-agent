@@ -144,8 +144,17 @@ async function decide(run, kind, buttons) {
   const reply = await post('/api/runs/' + run.runId + '/' + kind, {});
   if (reply.status === 200) {
     decisionArea.appendChild(decisionView(reply.body));
-  } else {
-    decisionArea.appendChild(el('p', 'error', reply.body.text || 'The decision was refused.'));
+    if (reply.body.result === 'decided') { return; }
+    // Nkap refused: the run is still open for a few attempts, so the buttons come back.
+    if (reply.body.attemptsLeft > 0) {
+      decisionArea.appendChild(el('p', 'small', 'This run has ' + reply.body.attemptsLeft + ' more attempt(s).'));
+      buttons.forEach((b) => { if (!b.dataset.blocked) { b.disabled = false; } });
+    }
+    return;
+  }
+  decisionArea.appendChild(el('p', 'error', reply.body.text || 'The decision was refused.'));
+  if (reply.status === 409 && reply.body.error === 'payment-already-approved') {
+    buttons.forEach((b) => { if (b.dataset.kind === 'approve') { b.dataset.blocked = 'yes'; } else { b.disabled = false; } });
   }
 }
 
@@ -164,13 +173,20 @@ function proposalView(run) {
     const selfApprove = el('button', null, "Try to approve with the agent's own key");
     approve.type = 'button';
     selfApprove.type = 'button';
+    approve.dataset.kind = 'approve';
+    selfApprove.dataset.kind = 'self-approve';
     const both = [approve, selfApprove];
     approve.addEventListener('click', () => decide(run, 'approve', both));
     selfApprove.addEventListener('click', () => decide(run, 'self-approve', both));
     row.appendChild(approve);
     row.appendChild(selfApprove);
+    if (run.approval && run.approval.available === false) {
+      approve.disabled = true;
+      approve.dataset.blocked = 'yes';
+      decisionArea.appendChild(el('p', 'refused', run.approval.text));
+    }
     decisionArea.appendChild(row);
-    decisionArea.appendChild(el('p', 'small', 'One decision per run. The approval is bound to a key, not to a person.'));
+    decisionArea.appendChild(el('p', 'small', 'A run takes one decision, and a few refused attempts. The approval is bound to a key, not to a person.'));
   }
 }
 

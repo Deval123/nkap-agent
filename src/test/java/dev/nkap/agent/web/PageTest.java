@@ -82,4 +82,18 @@ class PageTest {
         assertThat(button).isGreaterThan(guard);
         assertThat(js).containsPattern("if\\s*\\(\\s*run\\.runId\\s*\\)");
     }
+
+    @Test
+    @DisplayName("the page says, before a click, when approval is not available for the payment, and keeps the self-approve button; a refusal leaves the buttons for the next attempt")
+    void approvalUnavailableAndAttempts() throws IOException {
+        String js = read("app.js");
+        assertThat(js).contains("run.approval").contains("available === false").contains("approval.text");
+        assertThat(js).contains("attemptsLeft");
+        assertThat(js).containsPattern("approve\\.disabled\\s*=");
+        int block = js.indexOf("available === false");
+        int selfButton = js.indexOf("Try to approve with the agent's own key");
+        assertThat(block).isPositive();
+        assertThat(selfButton).isPositive();
+        assertThat(js).as("a refused attempt does not disable the buttons for good").contains("reply.body.result === 'decided'");
+    }
 }
