@@ -32,6 +32,10 @@ public final class AgentTools {
         this.trace = trace;
     }
 
+    Trace trace() {
+        return trace;
+    }
+
     /**
      * Searches the local copy of Nkap's provider pages: at most three passages, each with its file, its
      * heading and an excerpt. Offline; it makes no call of any kind.
