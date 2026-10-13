@@ -168,6 +168,10 @@ class GatewayToolsTest {
             ToolResult r = tools.getPayment(bad);
             assertThat(r.status()).as(bad).isZero();
             assertThat(r.fields().get("error").asText()).as(bad).isEqualTo("invalid-argument");
+            assertThat(r.fields().get("detail").asText()).as("fixed text").isEqualTo(
+                    "The argument must be the bare UUID, with no name and no quotes.");
+            assertThat(r.toBlock()).as("the refused value is not echoed back").doesNotContain("..").doesNotContain("not-a-uuid")
+                    .doesNotContain("1-2-3-4-5");
             assertThat(tools.getStatementFindings(bad).fields().get("error").asText()).isEqualTo("invalid-argument");
         }
         assertThat(tools.getPayment(null).fields().get("error").asText()).isEqualTo("invalid-argument");
