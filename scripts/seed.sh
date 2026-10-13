@@ -31,9 +31,13 @@ say "Starting the stack (built from the pinned Nkap commit; the first build take
 dc up -d --build --wait --wait-timeout 900 client >"$work/up.log" 2>&1 \
   || { tail -n 20 "$work/up.log" >&2; die "the stack did not come up"; }
 dc ps --format '{{.Service}}: {{.Status}}'
-echo "payments already in the database: $(psql 'select count(*) from payment')"
-[ "$(psql 'select count(*) from payment')" = 0 ] \
-  || die "the database is not fresh; run: docker compose -p $PROJECT down -v"
+payments="$(psql 'select count(*) from payment')"
+api_keys="$(psql 'select count(*) from api_key')"
+echo "already in the database: $payments payment(s), $api_keys API key(s)"
+# A first run that stopped half way leaves its keys (and maybe payments) behind; a second run would mint a second pair and
+# overwrite seed-keys.env, losing the first pair while it stays valid in the database.
+[ "$payments" = 0 ] && [ "$api_keys" = 0 ] \
+  || die "the database is not fresh (a previous seed stopped, or was never reset); from the repository root run: docker compose -p $PROJECT down -v, then scripts/seed.sh again"
 
 say "Minting two keys for merchant acme (not shown)"
 agent_key="$(mint agent admin)"
