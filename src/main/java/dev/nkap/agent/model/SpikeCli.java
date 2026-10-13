@@ -7,10 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.nkap.agent.scenario.Catalogue;
 import dev.nkap.agent.scenario.ExpectedPosting;
 import dev.nkap.agent.scenario.ExpectedProposal;
-import dev.nkap.agent.tools.EvidenceRef;
 import dev.nkap.agent.tools.ToolResult;
 import dev.nkap.agent.tools.Trace;
-import dev.nkap.agent.tools.Verification;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,7 +33,7 @@ import java.util.Set;
  *       masking as the tools' own. They are fixtures, not product prompts.
  *   <li>{@code check [--expect unrecorded-fee|no_proposal]} reads one JSON-encoded answer text per line on
  *       standard input and says for each whether it conforms to the schema and, with {@code --expect}, whether
- *       it is right and its evidence is in the trace. It prints counts of what the model did, never its text.
+ *       it is right and every evidence pointer resolves in the trace. It prints counts of what the model did, never its text.
  * </ul>
  */
 public final class SpikeCli {
@@ -102,7 +100,7 @@ public final class SpikeCli {
             + "unattributed_movement, float_drift, duplicate_posting. For provider mtn-cm and currency XAF you may "
             + "post only to suspense:mtn-cm:XAF, fees:mtn-cm:XAF and provider:mtn-cm:float:XAF, in signed minor "
             + "units (debit positive, credit negative, the postings sum to zero). Cite evidence only as "
-            + "(callId, path, value) of a tool result. If the evidence does not support a proposal, give "
+            + "(callId, path) of a tool result, the path being a JSON Pointer into the JSON of that result, such as /state. If the evidence does not support a proposal, give "
             + "outcome no_proposal.";
 
     private static List<Message> refused(String operatorCode) {
@@ -114,7 +112,7 @@ public final class SpikeCli {
                 new Message(Message.Role.USER, "Payment " + REFERENCE + " was refused by the operator. "
                         + "Look into it and conclude."),
                 new Message(Message.Role.ASSISTANT, callTool("get_payment", REFERENCE)),
-                new Message(Message.Role.TOOL_RESULT, wrap(result)));
+                new Message(Message.Role.TOOL_RESULT, result.toBlock()));
     }
 
     private static List<Message> realistic() {
@@ -125,9 +123,9 @@ public final class SpikeCli {
                         + IMPORT + " has been read. Find out whether the ledger misses something, and propose an "
                         + "adjustment if the evidence supports one."),
                 new Message(Message.Role.ASSISTANT, callTool("get_payment", REFERENCE)),
-                new Message(Message.Role.TOOL_RESULT, wrap(trace.results().get(0))),
+                new Message(Message.Role.TOOL_RESULT, trace.results().get(0).toBlock()),
                 new Message(Message.Role.ASSISTANT, callTool("get_statement_findings", IMPORT)),
-                new Message(Message.Role.TOOL_RESULT, wrap(trace.results().get(1))));
+                new Message(Message.Role.TOOL_RESULT, trace.results().get(1).toBlock()));
     }
 
     /**
@@ -183,11 +181,6 @@ public final class SpikeCli {
         step.put("operatorCode", operatorCode);
         step.put("note", "Moved by the response to the submission.");
         return p;
-    }
-
-    /** A clearly marked block of untrusted data, as the loop will have to wrap it. For the spike only. */
-    private static String wrap(ToolResult result) {
-        return "<tool_result call=\"" + result.callId() + "\" trust=\"untrusted\">" + result.toJson() + "</tool_result>";
     }
 
     private static String callTool(String tool, String argument) {
@@ -263,7 +256,7 @@ public final class SpikeCli {
                 .filter(c -> c.id().equals(expect)).findFirst().orElseThrow().proposal().orElseThrow();
         out.append(" hypothesis=").append(fin.hypothesis() == wanted.hypothesis() ? "right" : "wrong");
         out.append(" postings=").append(samePostings(fin.postings(), wanted.postings()) ? "right" : "wrong");
-        long verified = fin.evidence().stream().map(trace::verify).filter(Verification::ok).count();
+        long verified = fin.evidence().stream().filter(p -> trace.resolve(p.callId(), p.path()).isPresent()).count();
         out.append(" evidence=").append(verified).append('/').append(fin.evidence().size());
         return out.toString();
     }

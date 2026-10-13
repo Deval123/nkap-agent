@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.nkap.agent.scenario.Hypothesis;
 import dev.nkap.agent.tools.AgentTools;
-import dev.nkap.agent.tools.EvidenceRef;
+import dev.nkap.agent.tools.EvidencePointer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -20,9 +20,13 @@ import java.util.Set;
  *
  * <p>The schema is one object with an {@code action} and nullable fields, not a {@code oneOf} of two
  * objects. Whether the provider's strict mode accepts a {@code oneOf} could not be established without
- * calling it, and a flat object uses only the keywords every strict decoder takes. That an action's own
- * fields are present and the other action's are null is then checked by {@link #parse}, which does not rely
- * on the provider enforcing anything. The spike measures whether it does.
+ * calling it, and a flat object uses only the keywords every strict decoder takes.
+ *
+ * <p>The spike measured what the provider enforces: the shape (eight fields, valid enums) and not the
+ * coupling between them. In a {@code final} answer it wrote {@code argument: ""} and a {@code tool}; in 11
+ * of 20 it wrote {@code outcome: null} beside a tool. So {@link #parse} reads the fields the answer's action
+ * uses, strictly, and ignores the others whatever they hold: an ignored field is never stored, logged or
+ * shown.
  */
 public final class AnswerSchema {
 
@@ -78,7 +82,6 @@ public final class AnswerSchema {
         ObjectNode referenceProps = reference.putObject("properties");
         referenceProps.set("callId", type("string", false));
         referenceProps.set("path", type("string", false));
-        referenceProps.set("value", type("string", false));
         closed(reference);
         ObjectNode evidence = type("array", true);
         evidence.set("items", reference);
@@ -136,7 +139,15 @@ public final class AnswerSchema {
         if (root == null || !root.isObject()) {
             throw new SchemaViolation("the answer is not a JSON object");
         }
-        exactFields(root, TOP, "answer");
+        int unknown = 0;
+        for (var names = root.fieldNames(); names.hasNext();) {
+            if (!TOP.contains(names.next())) {
+                unknown++;
+            }
+        }
+        if (unknown > 0) {
+            throw new SchemaViolation("answer has " + unknown + " property outside the schema");
+        }
         String action = enumValue(root, "action", List.of("call_tool", "final"), false);
         if (action.equals("call_tool")) {
             return callTool(root);
@@ -147,23 +158,13 @@ public final class AnswerSchema {
     private static ModelAnswer callTool(JsonNode root) throws SchemaViolation {
         String tool = enumValue(root, "tool", AgentTools.TOOL_NAMES, false);
         JsonNode argument = root.get("argument");
-        if (!argument.isTextual() || argument.asText().isBlank()) {
+        if (argument == null || !argument.isTextual() || argument.asText().isBlank()) {
             throw new SchemaViolation("argument must be a non-blank string");
-        }
-        for (String name : List.of("outcome", "hypothesis", "postings", "evidence", "explanation")) {
-            if (!root.get(name).isNull()) {
-                throw new SchemaViolation(name + " must be null in a call_tool answer");
-            }
         }
         return new ModelAnswer.CallTool(tool, argument.asText());
     }
 
     private static ModelAnswer finalAnswer(JsonNode root) throws SchemaViolation {
-        for (String name : List.of("tool", "argument")) {
-            if (!root.get(name).isNull()) {
-                throw new SchemaViolation(name + " must be null in a final answer");
-            }
-        }
         String outcomeCode = enumValue(root, "outcome", Arrays.stream(ModelAnswer.Verdict.values())
                 .map(ModelAnswer.Verdict::code).toList(), false);
         ModelAnswer.Verdict outcome = Arrays.stream(ModelAnswer.Verdict.values())
@@ -173,9 +174,9 @@ public final class AnswerSchema {
         Hypothesis hypothesis = hypothesisCode == null ? null : Arrays.stream(Hypothesis.values())
                 .filter(h -> h.code().equals(hypothesisCode)).findFirst().orElseThrow();
         List<Posting> postings = postings(root.get("postings"));
-        List<EvidenceRef> evidence = evidence(root.get("evidence"));
+        List<EvidencePointer> evidence = evidence(root.get("evidence"));
         JsonNode explanation = root.get("explanation");
-        if (!explanation.isTextual() || explanation.asText().isBlank()) {
+        if (explanation == null || !explanation.isTextual() || explanation.asText().isBlank()) {
             throw new SchemaViolation("explanation must be a non-blank string");
         }
         if (outcome == ModelAnswer.Verdict.PROPOSE) {
@@ -201,7 +202,7 @@ public final class AnswerSchema {
 
     private static List<Posting> postings(JsonNode node) throws SchemaViolation {
         List<Posting> out = new ArrayList<>();
-        if (node.isNull()) {
+        if (node == null || node.isNull()) {
             return out;
         }
         if (!node.isArray()) {
@@ -223,9 +224,9 @@ public final class AnswerSchema {
         return out;
     }
 
-    private static List<EvidenceRef> evidence(JsonNode node) throws SchemaViolation {
-        List<EvidenceRef> out = new ArrayList<>();
-        if (node.isNull()) {
+    private static List<EvidencePointer> evidence(JsonNode node) throws SchemaViolation {
+        List<EvidencePointer> out = new ArrayList<>();
+        if (node == null || node.isNull()) {
             return out;
         }
         if (!node.isArray()) {
@@ -235,10 +236,10 @@ public final class AnswerSchema {
             String where = "evidence[" + i + "]";
             JsonNode item = node.get(i);
             if (!item.isObject()) {
-                throw new SchemaViolation(where + " must be a reference object, not free text");
+                throw new SchemaViolation(where + " must be a pointer object, not free text");
             }
-            exactFields(item, Set.of("callId", "path", "value"), where);
-            out.add(new EvidenceRef(text(item, "callId", where), text(item, "path", where), text(item, "value", where)));
+            exactFields(item, Set.of("callId", "path"), where);
+            out.add(new EvidencePointer(text(item, "callId", where), text(item, "path", where)));
         }
         return out;
     }
@@ -255,10 +256,10 @@ public final class AnswerSchema {
     private static String enumValue(JsonNode object, String field, List<String> allowed, boolean nullable)
             throws SchemaViolation {
         JsonNode node = object.get(field);
-        if (node.isNull() && nullable) {
+        if ((node == null || node.isNull()) && nullable) {
             return null;
         }
-        if (!node.isTextual() || !allowed.contains(node.asText())) {
+        if (node == null || !node.isTextual() || !allowed.contains(node.asText())) {
             throw new SchemaViolation(field + " is not one of the allowed values");
         }
         return node.asText();

@@ -1,7 +1,7 @@
 package dev.nkap.agent.model;
 
 import dev.nkap.agent.scenario.Hypothesis;
-import dev.nkap.agent.tools.EvidenceRef;
+import dev.nkap.agent.tools.EvidencePointer;
 import java.util.List;
 
 /**
@@ -15,8 +15,8 @@ public sealed interface ModelAnswer {
     record CallTool(String tool, String argument) implements ModelAnswer {
     }
 
-    /** The model's conclusion. Evidence is a list of references into the trace, never free text. */
-    record Final(Verdict outcome, Hypothesis hypothesis, List<Posting> postings, List<EvidenceRef> evidence,
+    /** The model's conclusion. Evidence is a list of pointers into the trace, never free text and never a value. */
+    record Final(Verdict outcome, Hypothesis hypothesis, List<Posting> postings, List<EvidencePointer> evidence,
             String explanation) implements ModelAnswer {
 
         public Final {
