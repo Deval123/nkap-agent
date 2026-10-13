@@ -14,20 +14,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
 /** A local stand-in for Nkap: a handler decides each answer, and every request is recorded. */
-final class FakeNkap implements AutoCloseable {
+public final class FakeNkap implements AutoCloseable {
 
-    record Seen(String method, String path, Map<String, List<String>> headers, String body) {
+    public record Seen(String method, String path, Map<String, List<String>> headers, String body) {
     }
 
-    record Answer(int status, String body) {
+    public record Answer(int status, String body) {
     }
 
-    final List<Seen> seen = new CopyOnWriteArrayList<>();
-    volatile Function<Seen, Answer> handler = request -> new Answer(404, "{}");
-    volatile long delayMs;
+    public final List<Seen> seen = new CopyOnWriteArrayList<>();
+    public volatile Function<Seen, Answer> handler = request -> new Answer(404, "{}");
+    public volatile long delayMs;
     private final HttpServer server;
 
-    FakeNkap() throws IOException {
+    public FakeNkap() throws IOException {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
         server.createContext("/", exchange -> {
@@ -59,7 +59,7 @@ final class FakeNkap implements AutoCloseable {
         server.start();
     }
 
-    String url() {
+    public String url() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 

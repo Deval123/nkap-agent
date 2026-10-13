@@ -24,11 +24,11 @@ import java.util.List;
  * model in the end-to-end check, so that everything after the model (the validator, the clients, Nkap) runs for
  * real. {@link #forCase} writes the file for a catalogue case from the catalogue's own expected entry.
  */
-final class ScriptedAnswers implements AgentModel {
+public final class ScriptedAnswers implements AgentModel {
 
     private final Deque<String> lines;
 
-    ScriptedAnswers(List<String> lines) {
+    public ScriptedAnswers(List<String> lines) {
         this.lines = new ArrayDeque<>(lines);
     }
 
@@ -51,7 +51,7 @@ final class ScriptedAnswers implements AgentModel {
      * its entry with the evidence the validator asks for, or no proposal. {@code amount}, if given, replaces the
      * amount of the entry, keeping its signs.
      */
-    static List<String> forCase(ScenarioCase scenario, String reference, String importId, Long amount) {
+    public static List<String> forCase(ScenarioCase scenario, String reference, String importId, Long amount) {
         List<String> lines = new ArrayList<>();
         lines.add(AnswerSchema.toJson(new ModelAnswer.CallTool("get_payment", reference)));
         lines.add(AnswerSchema.toJson(new ModelAnswer.CallTool("get_statement_lines", importId)));
