@@ -37,6 +37,9 @@ teardown() {
 }
 trap teardown EXIT
 
+say "The scripts run on Debian 12: no jq keyword variable, GNU stat first"
+bash "$root/scripts/check-portability.sh" || failures=$((failures + 1))
+
 say "The files: no placeholder digest, and a valid compose configuration"
 if grep -rn -E 'sha256:0{64}' "$root/deploy" | grep -v "^$root/deploy/RUNBOOK.md" >"$out/placeholders"; then
   while read -r line; do echo "  placeholder: ${line#"$root"/}" >&2; done <"$out/placeholders"

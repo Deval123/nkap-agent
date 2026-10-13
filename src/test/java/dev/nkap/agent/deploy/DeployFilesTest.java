@@ -1,6 +1,7 @@
 package dev.nkap.agent.deploy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,6 +15,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -262,5 +264,31 @@ class DeployFilesTest {
                 .as("the one throwaway container has no network").allMatch(l -> l.contains("--network none") || true);
         assertThat(text).contains("--network none");
         assertThat(text).contains("approved-payments.json").doesNotContain("live-budget").doesNotContain("scripted-budget");
+    }
+
+    private static int portability(Path dir) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder("bash", "scripts/check-portability.sh", dir.toString()).redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+        return process.waitFor();
+    }
+
+    @Test
+    @DisplayName("the scripts name no jq variable after a jq keyword and read file modes with GNU stat first")
+    void scriptsArePortable() throws IOException, InterruptedException {
+        assumeTrue(new ProcessBuilder("bash", "-c", "command -v jq").start().waitFor() == 0, "jq is not installed");
+        assertThat(portability(Path.of("scripts").toAbsolutePath())).isZero();
+    }
+
+    @Test
+    @DisplayName("the portability check fails on a jq variable named label and on stat -f tried first")
+    void portabilityCheckFindsTheTwoFailures(@TempDir Path dir) throws IOException, InterruptedException {
+        assumeTrue(new ProcessBuilder("bash", "-c", "command -v jq").start().waitFor() == 0, "jq is not installed");
+        Files.copy(Path.of("scripts/seed-payment.jq"), dir.resolve("seed-payment.jq"));
+        Files.writeString(dir.resolve("a.sh"), "jq -nc --arg label x '{a:$label}'\n");
+        assertThat(portability(dir)).isNotZero();
+        Files.writeString(dir.resolve("a.sh"), "m=$(stat -f '%Lp' f 2>/dev/null || stat -c '%a' f)\n");
+        assertThat(portability(dir)).isNotZero();
+        Files.writeString(dir.resolve("a.sh"), "m=$(stat -c '%a' f 2>/dev/null || stat -f '%Lp' f)\njq -nc --arg note x '{a:$note}'\n");
+        assertThat(portability(dir)).isZero();
     }
 }
