@@ -108,7 +108,7 @@ public final class AgentLoop {
             }
             repaired = true;
             messages.add(new Message(Message.Role.ASSISTANT, canonical));
-            messages.add(new Message(Message.Role.USER, repairMessage(violations)));
+            messages.add(new Message(Message.Role.USER, repairMessage(violations, ProposalValidator.allowedAccounts(trace, reference))));
         }
         long elapsed = (limits.clock().getAsLong() - begun) / 1_000_000;
         return new RunRecord(reference, importId, lastSent, calls, trace.results(), outcome, elapsed);
@@ -144,9 +144,12 @@ public final class AgentLoop {
         return new Message(Message.Role.TOOL_RESULT, result.toBlock());
     }
 
-    private static String repairMessage(List<Violation> violations) {
+    private static String repairMessage(List<Violation> violations, List<String> allowedAccounts) {
         StringBuilder text = new StringBuilder("Your final answer was refused:\n");
         violations.forEach(v -> text.append("- ").append(v.text()).append('\n'));
+        if (!allowedAccounts.isEmpty() && violations.stream().anyMatch(v -> v.code().equals("account-not-allowed"))) {
+            text.append("Allowed accounts for this payment: ").append(String.join(", ", allowedAccounts)).append(".\n");
+        }
         text.append("Give a corrected final answer, or answer no_proposal if the evidence does not support one.");
         return text.toString();
     }

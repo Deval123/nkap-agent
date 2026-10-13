@@ -267,6 +267,37 @@ class AgentLoopTest {
     }
 
     @Test
+    @DisplayName("an account that is not allowed gets a repair message that lists the accounts that are, built from the payment in the trace and not from the model")
+    void repairListsTheAllowedAccounts() {
+        ModelAnswer.Final typo = propose(Hypothesis.UNRECORDED_FEE,
+                List.of(new Posting("suspsense:mtn-cm:XAF", 75, C), new Posting(FLOAT, -75, C)), CITES_FEE);
+        ScriptedModel model = looksThenAnswers(typo, goodFinal());
+        RunRecord record = run(model);
+        String repair = model.seen.get(3).get(model.seen.get(3).size() - 1).content();
+        assertThat(repair).contains("An account is not the suspense, fees or provider float account");
+        assertThat(repair).contains("Allowed accounts for this payment: suspense:mtn-cm:XAF, fees:mtn-cm:XAF, provider:mtn-cm:float:XAF");
+        assertThat(repair).as("nothing of the model's answer is echoed").doesNotContain("suspsense");
+        assertThat(proposed(record).proposal().postings()).isEqualTo(feeEntry(75));
+    }
+
+    @Test
+    @DisplayName("the allowed accounts are listed for the account rule only, and only when the trace names the payment's provider and currency")
+    void allowedAccountsOnlyForThatRule() {
+        ModelAnswer.Final wrongEntry = propose(Hypothesis.UNRECORDED_FEE,
+                List.of(new Posting(SUSPENSE, 75, C), new Posting(FEES, -75, C)), CITES_FEE);
+        ScriptedModel model = looksThenAnswers(wrongEntry, goodFinal());
+        run(model);
+        assertThat(model.seen.get(3).get(model.seen.get(3).size() - 1).content()).doesNotContain("Allowed accounts");
+
+        gateway.serve("/payments/" + REF, "{\"reference\":\"" + REF + "\",\"state\":\"UNKNOWN\"}");
+        ModelAnswer.Final typo = propose(Hypothesis.UNRECORDED_FEE,
+                List.of(new Posting("suspsense:mtn-cm:XAF", 75, C), new Posting(FLOAT, -75, C)), CITES_FEE);
+        ScriptedModel unknown = looksThenAnswers(typo, typo);
+        run(unknown);
+        assertThat(unknown.seen.get(3).get(unknown.seen.get(3).size() - 1).content()).doesNotContain("Allowed accounts");
+    }
+
+    @Test
     @DisplayName("a second invalid final ends the run as REJECTED with the violations")
     void rejectedTwice() {
         ModelAnswer.Final wrong = propose(Hypothesis.UNRECORDED_FEE,
