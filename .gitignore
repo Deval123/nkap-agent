@@ -20,3 +20,6 @@ application-local.yml
 # Working notes for the current session, kept out of the repository
 PLAN.md
 STATE.md
+
+# Written by scripts/seed.sh: the case manifest
+seed-manifest.json

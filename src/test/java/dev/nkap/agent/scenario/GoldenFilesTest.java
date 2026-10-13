@@ -21,7 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 class GoldenFilesTest {
 
     private static final List<String> GOLDEN = List.of(
-            "duplicate-posting.csv", "money-without-owner.csv", "self-approval.csv",
+            "cases.json", "duplicate-posting.csv", "money-without-owner.csv", "self-approval.csv",
             "simulator.json", "unrecorded-fee.csv");
 
     @TempDir

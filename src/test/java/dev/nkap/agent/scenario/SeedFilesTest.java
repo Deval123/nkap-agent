@@ -19,12 +19,12 @@ class SeedFilesTest {
     Path tmp;
 
     @Test
-    @DisplayName("one simulator document and one statement per case that has lines are written, and nothing else")
+    @DisplayName("the case list, one simulator document and one statement per case that has lines are written, and nothing else")
     void fileSet() throws IOException {
         Path dir = Files.createDirectory(tmp.resolve("a"));
         SeedFiles.write(dir);
         assertThat(names(dir)).containsExactly(
-                "duplicate-posting.csv", "money-without-owner.csv", "self-approval.csv",
+                "cases.json", "duplicate-posting.csv", "money-without-owner.csv", "self-approval.csv",
                 "simulator.json", "unrecorded-fee.csv");
     }
 

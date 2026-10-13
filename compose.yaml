@@ -1,0 +1,113 @@
+# The demo stack of the agent: Nkap's gateway, Nkap's simulator and a database.
+#
+# It is shaped differently from Nkap's own demo on purpose:
+#
+#   * Nothing is published. Neither the gateway, the simulator, the database nor the management
+#     port maps a port to the host. Reach them from inside the compose network, which is what the
+#     `client` service under the `tools` profile is for. `compose.dev.yaml` adds loopback-only
+#     mappings for local work.
+#   * It is built from one pinned Nkap commit, because the published images predate the
+#     adjustment API. Pin by commit, never by branch: it moves only by a reviewed change to the
+#     line below.
+#   * No key is provisioned here and no webhook endpoint is created. `scripts/seed.sh` mints the
+#     keys, and they never appear in this file.
+#
+# Nothing in this file is a secret. The operator credentials are placeholders in `secrets/`, which
+# point the gateway at the simulator.
+
+name: nkap-agent-demo
+
+# The one place the Nkap commit is recorded.
+x-nkap-source: &nkap-source "https://github.com/Deval123/nkap.git#1cbd8a404490968c961f4b301a815629aab574c8"
+
+services:
+  db:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_DB: nkap
+      POSTGRES_USER: nkap
+      # Not a secret: this database holds a demo and has no published port.
+      POSTGRES_PASSWORD: nkap
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nkap -d nkap"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  simulator:
+    build:
+      context: *nkap-source
+      dockerfile: simulator/Dockerfile
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/_nkap/scenarios"]
+      interval: 2s
+      timeout: 3s
+      retries: 40
+
+  gateway:
+    build:
+      context: *nkap-source
+      dockerfile: server/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      simulator:
+        condition: service_healthy
+    environment:
+      NKAP_DB_URL: jdbc:postgresql://db:5432/nkap
+      NKAP_DB_USER: nkap
+      NKAP_DB_PASSWORD: nkap
+
+      # One installation, Cameroon, pointed at the simulator.
+      NKAP_PROVIDER_MTN_CM_COUNTRY: cm
+      NKAP_PROVIDER_MTN_CM_BASE_URL: http://simulator:8081
+      NKAP_PROVIDER_MTN_CM_TARGET_ENVIRONMENT: sandbox
+      NKAP_PROVIDER_MTN_CM_REQUEST_TIMEOUT: PT2S
+
+      # The reconciler keeps the cadence of Nkap's demo. `compose.seed.yaml` shortens it for the seed.
+      NKAP_RECONCILER_INTERVAL: PT3S
+      NKAP_RECONCILER_BACKOFF_BASE: PT3S
+      NKAP_RECONCILER_BACKOFF_MAX: PT10S
+      NKAP_RECONCILER_WINDOW: PT2M
+
+      # The agent proposes adjustments and a second key approves them (Nkap's ADR 0017).
+      NKAP_ADJUSTMENTS_ENABLED: "true"
+      # No webhook endpoint exists in this stack, so the relay has nothing to send. It is off as well.
+      NKAP_WEBHOOKS_ENABLED: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9464/actuator/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    secrets:
+      - NKAP_PROVIDER_MTN_CM_SUBSCRIPTION_KEY
+      - NKAP_PROVIDER_MTN_CM_API_USER
+      - NKAP_PROVIDER_MTN_CM_API_KEY
+      - NKAP_PROVIDER_MTN_CM_DISBURSEMENT_SUBSCRIPTION_KEY
+      - NKAP_PROVIDER_MTN_CM_DISBURSEMENT_API_USER
+      - NKAP_PROVIDER_MTN_CM_DISBURSEMENT_API_KEY
+
+  # A curl on the compose network, for the scripts: the gateway and the simulator publish nothing, so
+  # a script reaches them from here. Started only with `--profile tools`.
+  client:
+    image: curlimages/curl:8.11.1
+    profiles: ["tools"]
+    entrypoint: ["sleep", "infinity"]
+    init: true
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+secrets:
+  NKAP_PROVIDER_MTN_CM_SUBSCRIPTION_KEY:
+    file: ./secrets/NKAP_PROVIDER_MTN_CM_SUBSCRIPTION_KEY
+  NKAP_PROVIDER_MTN_CM_API_USER:
+    file: ./secrets/NKAP_PROVIDER_MTN_CM_API_USER
+  NKAP_PROVIDER_MTN_CM_API_KEY:
+    file: ./secrets/NKAP_PROVIDER_MTN_CM_API_KEY
+  NKAP_PROVIDER_MTN_CM_DISBURSEMENT_SUBSCRIPTION_KEY:
+    file: ./secrets/NKAP_PROVIDER_MTN_CM_DISBURSEMENT_SUBSCRIPTION_KEY
+  NKAP_PROVIDER_MTN_CM_DISBURSEMENT_API_USER:
+    file: ./secrets/NKAP_PROVIDER_MTN_CM_DISBURSEMENT_API_USER
+  NKAP_PROVIDER_MTN_CM_DISBURSEMENT_API_KEY:
+    file: ./secrets/NKAP_PROVIDER_MTN_CM_DISBURSEMENT_API_KEY

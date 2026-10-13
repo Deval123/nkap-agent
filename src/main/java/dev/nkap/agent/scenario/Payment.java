@@ -11,4 +11,14 @@ public record Payment(String label, long amountMinor, String currency, String ms
             throw new IllegalArgumentException("an MSISDN is 8 to 15 digits");
         }
     }
+
+    /** Derived from what the simulator is told to do, so the two cannot disagree. */
+    public Ending ending() {
+        return switch (behaviour.submit()) {
+            case NO_RESPONSE -> Ending.ESCALATED;
+            case BAD_REQUEST -> Ending.FAILED;
+            case ACCEPT -> behaviour.queries().get(behaviour.queries().size() - 1).status().equals("SUCCESSFUL")
+                    ? Ending.SETTLED : Ending.ESCALATED;
+        };
+    }
 }

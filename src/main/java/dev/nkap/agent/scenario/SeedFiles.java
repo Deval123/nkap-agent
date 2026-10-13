@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Writes the files that describe the cases, from {@link Catalogue} and nothing else: {@code simulator.json}
- * and one {@code <case-id>.csv} for each case that has statement lines. The same catalogue gives the same
+ * Writes the files that describe the cases, from {@link Catalogue} and nothing else: {@code cases.json},
+ * {@code simulator.json} and one {@code <case-id>.csv} for each case that has statement lines. The same catalogue gives the same
  * bytes on any machine and on any day: UTF-8 without a byte order mark, LF endings, no clock.
  *
  * <p>Usage: {@code SeedFiles <directory>}. The directory must exist and be empty.
@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 public final class SeedFiles {
 
     static final String SIMULATOR_FILE = "simulator.json";
+    static final String CASES_FILE = "cases.json";
 
     private SeedFiles() {
     }
@@ -39,6 +40,7 @@ public final class SeedFiles {
 
         List<ScenarioCase> cases = Catalogue.all().stream().sorted(Comparator.comparing(ScenarioCase::id)).toList();
         List<Path> written = new ArrayList<>();
+        written.add(put(dir, CASES_FILE, CasesJson.render(cases)));
         written.add(put(dir, SIMULATOR_FILE, SimulatorDocument.render(cases)));
         for (ScenarioCase c : cases) {
             if (!c.lines().isEmpty()) {

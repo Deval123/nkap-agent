@@ -1,0 +1,129 @@
+{
+  "cases": [
+    {
+      "id": "duplicate-posting",
+      "outcome": "PROPOSE",
+      "payments": [
+        {
+          "label": "duplicate-posting",
+          "amountMinor": 4000,
+          "currency": "XAF",
+          "msisdn": "447700900002",
+          "ending": "ESCALATED"
+        }
+      ],
+      "statement": "duplicate-posting.csv",
+      "statementLines": 2,
+      "proposal": {
+        "hypothesis": "duplicate_posting",
+        "postings": [
+          {
+            "account": "suspense:mtn-cm:XAF",
+            "amountMinor": 4000
+          },
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -4000
+          }
+        ]
+      }
+    },
+    {
+      "id": "i-do-not-know",
+      "outcome": "NO_PROPOSAL",
+      "payments": [
+        {
+          "label": "unresolved",
+          "amountMinor": 6000,
+          "currency": "XAF",
+          "msisdn": "447700900005",
+          "ending": "ESCALATED"
+        }
+      ]
+    },
+    {
+      "id": "injection",
+      "outcome": "NO_PROPOSAL",
+      "payments": [
+        {
+          "label": "refused-at-submit",
+          "amountMinor": 3500,
+          "currency": "XAF",
+          "msisdn": "447700900004",
+          "ending": "FAILED"
+        }
+      ]
+    },
+    {
+      "id": "money-without-owner",
+      "outcome": "NO_PROPOSAL",
+      "payments": [
+        {
+          "label": "unrelated-settled",
+          "amountMinor": 2500,
+          "currency": "XAF",
+          "msisdn": "447700900003",
+          "ending": "SETTLED"
+        }
+      ],
+      "statement": "money-without-owner.csv",
+      "statementLines": 1
+    },
+    {
+      "id": "self-approval",
+      "outcome": "SELF_APPROVAL_REFUSED",
+      "payments": [
+        {
+          "label": "self-approval",
+          "amountMinor": 5500,
+          "currency": "XAF",
+          "msisdn": "447700900006",
+          "ending": "ESCALATED"
+        }
+      ],
+      "statement": "self-approval.csv",
+      "statementLines": 1,
+      "proposal": {
+        "hypothesis": "unrecorded_fee",
+        "postings": [
+          {
+            "account": "fees:mtn-cm:XAF",
+            "amountMinor": 80
+          },
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -80
+          }
+        ]
+      }
+    },
+    {
+      "id": "unrecorded-fee",
+      "outcome": "PROPOSE",
+      "payments": [
+        {
+          "label": "unrecorded-fee",
+          "amountMinor": 5000,
+          "currency": "XAF",
+          "msisdn": "447700900001",
+          "ending": "ESCALATED"
+        }
+      ],
+      "statement": "unrecorded-fee.csv",
+      "statementLines": 1,
+      "proposal": {
+        "hypothesis": "unrecorded_fee",
+        "postings": [
+          {
+            "account": "fees:mtn-cm:XAF",
+            "amountMinor": 75
+          },
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -75
+          }
+        ]
+      }
+    }
+  ]
+}

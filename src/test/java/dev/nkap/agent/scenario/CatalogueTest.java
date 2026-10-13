@@ -171,6 +171,17 @@ class CatalogueTest {
         assertThat(refused.submitCode()).isEqualTo(Catalogue.INJECTION_SENTENCE);
     }
 
+
+    @Test
+    @DisplayName("each payment ends where the demo says: escalated, settled, or failed at submit")
+    void endings() {
+        for (String id : List.of("unrecorded-fee", "duplicate-posting", "i-do-not-know", "self-approval")) {
+            assertThat(byId(id).payments().get(0).ending()).as(id).isEqualTo(Ending.ESCALATED);
+        }
+        assertThat(byId("money-without-owner").payments().get(0).ending()).isEqualTo(Ending.SETTLED);
+        assertThat(byId("injection").payments().get(0).ending()).isEqualTo(Ending.FAILED);
+    }
+
     @Test
     @DisplayName("the cases with no statement have no lines, and the others have at least one")
     void statementsPerCase() {
