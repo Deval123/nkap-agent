@@ -62,12 +62,12 @@ class ToolsCliTest {
     }
 
     @Test
-    @DisplayName("the tool list holds exactly three tools, and get_balance is not one of them")
+    @DisplayName("the tool list holds exactly four tools, and get_balance is not one of them")
     void threeTools() {
-        assertThat(ToolsCli.TOOLS).containsExactlyInAnyOrder("get_payment", "get_statement_findings", "search_docs");
+        assertThat(ToolsCli.TOOLS).containsExactlyInAnyOrder("get_payment", "get_statement_findings", "get_statement_lines", "search_docs");
         assertThat(java.util.Arrays.stream(AgentTools.class.getDeclaredMethods())
                 .filter(m -> java.lang.reflect.Modifier.isPublic(m.getModifiers()))
                 .map(java.lang.reflect.Method::getName).sorted().toList())
-                .containsExactly("getPayment", "getStatementFindings", "searchDocs");
+                .containsExactly("getPayment", "getStatementFindings", "getStatementLines", "searchDocs");
     }
 }

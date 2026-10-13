@@ -41,6 +41,7 @@ public final class ToolsCli {
         ToolResult result = switch (args[0]) {
             case "get_payment" -> tools.getPayment(args[1]);
             case "get_statement_findings" -> tools.getStatementFindings(args[1]);
+            case "get_statement_lines" -> tools.getStatementLines(args[1]);
             default -> tools.searchDocs(args[1]);
         };
         out.println(result.toJson());

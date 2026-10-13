@@ -17,7 +17,7 @@ import java.util.function.Function;
 import java.util.function.LongSupplier;
 
 /**
- * Runs the model against the three tools until it gives a final answer the validator accepts, or a bound is
+ * Runs the model against the four tools until it gives a final answer the validator accepts, or a bound is
  * reached. It sends nothing to Nkap. A run is bounded in model calls, completion tokens and time; a
  * model failure ends it, with no retry; a final answer that breaks a rule gets one repair message, and a
  * second one ends the run as rejected.
@@ -137,6 +137,7 @@ public final class AgentLoop {
         ToolResult result = switch (call.tool()) {
             case "get_payment" -> tools.getPayment(call.argument());
             case "get_statement_findings" -> tools.getStatementFindings(call.argument());
+            case "get_statement_lines" -> tools.getStatementLines(call.argument());
             default -> tools.searchDocs(call.argument());
         };
         asked.put(key, result.callId());
