@@ -1,0 +1,12 @@
+# Local work only: publishes the gateway and the simulator on the loopback interface of this machine,
+# and nowhere else. Use it as `docker compose -f compose.yaml -f compose.dev.yaml up`.
+#
+# Never replace 127.0.0.1 with 0.0.0.0 or drop it: the agent's key is an admin key, and the only
+# thing between it and the network is that nothing is published.
+services:
+  gateway:
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
+  simulator:
+    ports:
+      - "127.0.0.1:${SIMULATOR_PORT:-8081}:8081"

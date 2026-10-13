@@ -1,0 +1,13 @@
+# Layered over compose.yaml by scripts/seed.sh. It shortens the reconciler, with the values of
+# scripts/observe.override.compose.yaml, so that an unresolved payment is escalated within seconds
+# and the seed does not wait two minutes for each.
+#
+# A real deployment must not copy these values: a window of five seconds would escalate payments
+# whose operator is merely slow, and an interval of one second asks the operator once a second.
+services:
+  gateway:
+    environment:
+      NKAP_RECONCILER_INTERVAL: PT1S
+      NKAP_RECONCILER_BACKOFF_BASE: PT1S
+      NKAP_RECONCILER_BACKOFF_MAX: PT2S
+      NKAP_RECONCILER_WINDOW: PT5S
