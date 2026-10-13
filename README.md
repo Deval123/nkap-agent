@@ -129,11 +129,26 @@ reference the run was started with (the proposal always carries the run's, never
 - at least one piece of evidence, every pointer resolves in the trace, and the entry's amount appears as a whole
   number in a cited value.
 
+A refusal is held to less, because a refusal costs nothing: it must carry no hypothesis and no postings, and a
+citation of it that does not resolve is dropped and counted in the record (`droppedCitations`), never a violation.
+That matters because absence can be the evidence: a pointer to a JSON null or an empty string that is present in
+a result resolves to `"null"` or `""`, and a missing key, an object or an array still does not resolve. Neither
+`"null"` nor `""` can contain the entry's amount, so they cannot satisfy the amount check of a proposal.
+
 It does **not** check that the hypothesis is the true one. A wrong but well-formed proposal passes: a fee
 booked for a payment that had none, with an amount found in the statement, would. The human who approves is the
 last check, and so is the different key that approval needs. A `no_proposal` answer is accepted without
 requiring any tool call: not proposing is the safe answer, and the validator only checks that it carries no
 entry and that any evidence it cites resolves.
+
+### What the prompt carries
+
+The system prompt does not only name the hypotheses and their entries: for each one it carries a **definition of
+what it looks like in the evidence** and says that the entry is the *correction* (for a duplicate, the reverse of
+the faulty posting, not a copy of it; for an unrecorded fee, the booking of the fee). It also says an argument is
+the bare UUID. These are general words: a test fails if a case name, an amount or a transaction id of the
+catalogue appears in the prompt. The six cases are a **demonstration set, not a benchmark**: changing the prompt
+after reading their results fits it to them, and a good score on the same six says little about other payments.
 
 ### What was measured, and how few the numbers are
 
@@ -152,13 +167,20 @@ robustness:
 - Reasoning is 85 to 97 percent of the completion tokens, so `max_tokens` is 6000 for the loop; at 500, three of
   three were cut off with no answer. Calls took 7 to 14 s.
 
+**First run of the six cases** (maintainer, 3 runs per case, 18 runs, 67 model calls, about 0.063 USD): 10 of 18
+matched. `money-without-owner`, `injection` and `i-do-not-know` 3 of 3, `duplicate-posting` 1 of 3,
+`unrecorded-fee` and `self-approval` 0 of 3 (the fee is not in the findings). The prompt and the checks above were
+changed after reading those records. **Second run: not made yet**; its place is in
+[`docs/nebius-feedback.md`](docs/nebius-feedback.md). Three runs per case is a very small sample.
+
 ### Running it
 
 `scripts/run-cases.sh` runs each catalogue case K times (default 3, at most 5) against a throwaway seeded stack
 with the real model, and prints a table per case and run: outcome, whether the hypothesis and entry equal the
 catalogue's expectation, calls, tokens, milliseconds, cost. It has the spike's safeguards: a hard cap on model
 calls (default 60, at most 120), a worst-case spend printed first, a stop after three failed calls in a row, the
-key read from `NEBIUS_API_KEY` and never printed, and records in `run-results/`, which git ignores. It is for the
+key read from `NEBIUS_API_KEY` and never printed, and records in `run-results/`, which git ignores. The table and
+the totals go to standard output; the log goes to standard error, at WARNING, or at INFO with `--verbose`. It is for the
 maintainer, who holds the key. `scripts/verify-run.sh` runs the same runner against a scripted fake model and a
 fake gateway, and fails if a wrong entry is not shown as a mismatch.
 
