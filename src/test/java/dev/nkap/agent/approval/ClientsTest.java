@@ -332,4 +332,22 @@ class ClientsTest {
             }
         }
     }
+
+    @Test
+    @DisplayName("of everything compiled in this repository, only the approval command calls the approver: no other class refers to it")
+    void onlyTheCommandApproves() throws Exception {
+        java.nio.file.Path classes = java.nio.file.Path.of(AdjustmentApprover.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        List<String> referring = new java.util.ArrayList<>();
+        try (var files = java.nio.file.Files.walk(classes)) {
+            for (java.nio.file.Path file : files.filter(f -> f.toString().endsWith(".class")).toList()) {
+                String bytes = new String(java.nio.file.Files.readAllBytes(file), java.nio.charset.StandardCharsets.ISO_8859_1);
+                if (bytes.contains("dev/nkap/agent/approval/AdjustmentApprover")) {
+                    referring.add(classes.relativize(file).toString());
+                }
+            }
+        }
+        assertThat(referring).allMatch(name -> name.startsWith("dev/nkap/agent/approval/AdjustmentApprover")
+                || name.startsWith("dev/nkap/agent/approval/ApprovalCli"), referring.toString());
+        assertThat(referring).anyMatch(name -> name.startsWith("dev/nkap/agent/approval/ApprovalCli"));
+    }
 }

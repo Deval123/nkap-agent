@@ -238,7 +238,7 @@ public final class RunCli {
      * standard error. The table goes to standard output; the log is kept below it by default and shown at
      * INFO with {@code --verbose}. The classes that log are not touched: only the JDK logger's level is.
      */
-    static void configureLogging(boolean verbose) {
+    public static void configureLogging(boolean verbose) {
         java.util.logging.Level level = verbose ? java.util.logging.Level.INFO : java.util.logging.Level.WARNING;
         java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
         root.setLevel(level);
