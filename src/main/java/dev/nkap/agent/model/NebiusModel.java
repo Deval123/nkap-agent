@@ -61,6 +61,9 @@ public final class NebiusModel implements AgentModel {
         if (timeout == null || timeout.isZero() || timeout.isNegative()) {
             throw new IllegalArgumentException("the timeout is positive");
         }
+        if (baseUrl == null || !(baseUrl.startsWith("https://") || baseUrl.matches("http://(127\\.0\\.0\\.1|localhost)([:/].*)?"))) {
+            throw new IllegalArgumentException("the base URL is https, or a loopback address: the key is not sent in clear");
+        }
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
         this.key = key;
         this.model = model;
@@ -81,7 +84,7 @@ public final class NebiusModel implements AgentModel {
         }
         String credential = credential();
         if (credential == null) {
-            return new ModelResult.Failed(ModelResult.Reason.NO_KEY, "the model key is not set", null);
+            return new ModelResult.Failed(ModelResult.Reason.NO_KEY, "the model key is not set or cannot be used", null);
         }
         Exchange exchange = exchange(messages, credential, begun);
         int status = exchange.status();
@@ -99,7 +102,7 @@ public final class NebiusModel implements AgentModel {
     private String credential() {
         try {
             String value = key.get();
-            return value == null || value.isBlank() ? null : value;
+            return value == null || value.isBlank() || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0 ? null : value;
         } catch (RuntimeException e) {
             return null;
         }
