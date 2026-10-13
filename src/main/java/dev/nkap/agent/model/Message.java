@@ -14,6 +14,15 @@ public record Message(Role role, String content) {
         TOOL_RESULT
     }
 
+    /** The role name the provider's API knows. A tool result goes as a user message: it is data. */
+    public String wireRole() {
+        return switch (role) {
+            case SYSTEM -> "system";
+            case ASSISTANT -> "assistant";
+            case USER, TOOL_RESULT -> "user";
+        };
+    }
+
     public Message {
         if (role == null || content == null) {
             throw new IllegalArgumentException("a message has a role and a content");

@@ -175,19 +175,10 @@ public final class NebiusModel implements AgentModel {
         ArrayNode sent = body.putArray("messages");
         for (Message message : messages) {
             ObjectNode node = sent.addObject();
-            node.put("role", switch (message.role()) {
-                case SYSTEM -> "system";
-                case ASSISTANT -> "assistant";
-                case USER, TOOL_RESULT -> "user";
-            });
+            node.put("role", message.wireRole());
             node.put("content", message.content());
         }
-        ObjectNode format = body.putObject("response_format");
-        format.put("type", "json_schema");
-        ObjectNode schema = format.putObject("json_schema");
-        schema.put("name", AnswerSchema.NAME);
-        schema.put("strict", true);
-        schema.set("schema", AnswerSchema.schema());
+        body.set("response_format", AnswerSchema.responseFormat());
         return body.toString();
     }
 

@@ -41,6 +41,17 @@ public final class AnswerSchema {
         return SCHEMA.deepCopy();
     }
 
+    /** The {@code response_format} member of a request: this schema, strict. */
+    public static ObjectNode responseFormat() {
+        ObjectNode format = F.objectNode();
+        format.put("type", "json_schema");
+        ObjectNode wrapper = format.putObject("json_schema");
+        wrapper.put("name", NAME);
+        wrapper.put("strict", true);
+        wrapper.set("schema", schema());
+        return format;
+    }
+
     private static ObjectNode build() {
         ObjectNode properties = F.objectNode();
         properties.set("action", enumOf(false, "call_tool", "final"));
