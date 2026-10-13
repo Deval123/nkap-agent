@@ -11,11 +11,35 @@ source "$(dirname "${BASH_SOURCE[0]}")/stack-lib.sh"
 
 out="$(mktemp -d)"
 export SEED_OUT="$out"
+partial="$SEED_PROJECT-partial"
 teardown() {
   dc down -v --remove-orphans >/dev/null 2>&1 || true
+  PROJECT="$partial" dc down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$out"
 }
 trap teardown EXIT
+
+say "A seed that stops half way, and a second run (project $partial)"
+# A jq that fails on the payment filter, as jq 1.6 did on `\$label`: the seed stops after minting its keys, with the stack up.
+mkdir "$out/bin" "$out/partial"
+cat >"$out/bin/jq" <<STUB
+#!/bin/sh
+case "\$*" in *seed-payment.jq*) echo "jq: error: syntax error, unexpected label" >&2; exit 3 ;; esac
+exec "$(command -v jq)" "\$@"
+STUB
+chmod +x "$out/bin/jq"
+if SEED_PROJECT="$partial" SEED_OUT="$out/partial" PATH="$out/bin:$PATH" bash "$root/scripts/seed.sh" >"$out/partial.log" 2>&1; then
+  expect "the first run stops at the payments" "it did not stop" "it stopped"
+fi
+expect "the first run stopped after minting its keys" "$(grep -c '^written: seed-keys.env' "$out/partial.log" || true)" "1"
+keys_before="$(cksum <"$out/partial/seed-keys.env")"
+if SEED_PROJECT="$partial" SEED_OUT="$out/partial" bash "$root/scripts/seed.sh" >"$out/again.log" 2>&1; then
+  expect "the second run refuses" "it ran" "it refused"
+fi
+expect "the second run names the recovery" "$(grep -c -F "docker compose -p $partial down -v" "$out/again.log" || true)" "1"
+expect "the second run mints no second pair of keys" "$(PROJECT="$partial" psql 'select count(*) from api_key')" "2"
+expect "the second run leaves the keys file as it was" "$(cksum <"$out/partial/seed-keys.env")" "$keys_before"
+PROJECT="$partial" dc down -v --remove-orphans >/dev/null 2>&1 || true
 
 say "Published ports, from docker compose config"
 ports() { docker compose --project-directory "$root" "$@" config --format json \
@@ -33,6 +57,12 @@ expect "compose.dev.yaml publishes the gateway and the simulator" \
 say "Seeding a throwaway stack (project $SEED_PROJECT)"
 bash "$root/scripts/seed.sh" >"$out/seed.log" 2>&1 || { tail -n 25 "$out/seed.log" >&2; die "scripts/seed.sh failed"; }
 tail -n 4 "$out/seed.log"
+mkdir "$out/second"
+if SEED_OUT="$out/second" bash "$root/scripts/seed.sh" >"$out/second.log" 2>&1; then
+  expect "a second run after a complete seed refuses" "it ran" "it refused"
+fi
+expect "the refusal names the recovery" "$(grep -c -F "docker compose -p $SEED_PROJECT down -v" "$out/second.log" || true)" "1"
+expect "the refused run wrote no keys file" "$(ls -A "$out/second" | wc -l | tr -d ' ')" "0"
 set -a; source "$out/seed-keys.env"; set +a
 agent_key="$NKAP_AGENT_KEY"; approver_key="$NKAP_APPROVER_KEY"
 unset NKAP_AGENT_KEY NKAP_APPROVER_KEY
@@ -44,7 +74,7 @@ cases="$out/files/cases.json"
 
 say "The manifest and the keys file"
 expect "the manifest holds six cases" "$(jq '.cases | length' "$manifest")" "6"
-expect "the keys file has mode 600" "$(stat -f '%Lp' "$out/seed-keys.env" 2>/dev/null || stat -c '%a' "$out/seed-keys.env")" "600"
+expect "the keys file has mode 600" "$(stat -c '%a' "$out/seed-keys.env" 2>/dev/null || stat -f '%Lp' "$out/seed-keys.env")" "600"
 expect "the manifest holds no key" "$(grep -c -F -e "$agent_key" -e "$approver_key" "$manifest" || true)" "0"
 expect "the seed's output holds no key" "$(grep -c -F -e "$agent_key" -e "$approver_key" "$out/seed.log" || true)" "0"
 

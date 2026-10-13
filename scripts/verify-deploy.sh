@@ -37,6 +37,9 @@ teardown() {
 }
 trap teardown EXIT
 
+say "The scripts run on Debian 12: no jq keyword variable, GNU stat first"
+bash "$root/scripts/check-portability.sh" || failures=$((failures + 1))
+
 say "The files: no placeholder digest, and a valid compose configuration"
 if grep -rn -E 'sha256:0{64}' "$root/deploy" | grep -v "^$root/deploy/RUNBOOK.md" >"$out/placeholders"; then
   while read -r line; do echo "  placeholder: ${line#"$root"/}" >&2; done <"$out/placeholders"
@@ -77,7 +80,7 @@ expect "the ledger was seeded: there are no adjustment entries yet" "$(psql "sel
 
 say "Taking the snapshot, then starting the deployment (a fake tunnel, no model key)"
 bash "$root/scripts/reset-demo.sh" --this-is-the-demo-deployment snapshot >"$out/snapshot.log" 2>&1 || { cat "$out/snapshot.log" >&2; die "the snapshot failed"; }
-expect "the snapshot is private" "$(stat -f '%Lp' "$out/seed.dump" 2>/dev/null || stat -c '%a' "$out/seed.dump")" "600"
+expect "the snapshot is private" "$(stat -c '%a' "$out/seed.dump" 2>/dev/null || stat -f '%Lp' "$out/seed.dump")" "600"
 dc2 --profile tools rm -s -f client >/dev/null 2>&1 || true
 dc2 up -d --wait --wait-timeout 300 >"$out/up.log" 2>&1 || { tail -n 30 "$out/up.log" >&2; die "the deployment did not come up"; }
 dc2 ps --format '{{.Service}}: {{.Status}}'

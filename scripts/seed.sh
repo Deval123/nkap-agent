@@ -31,9 +31,13 @@ say "Starting the stack (built from the pinned Nkap commit; the first build take
 dc up -d --build --wait --wait-timeout 900 client >"$work/up.log" 2>&1 \
   || { tail -n 20 "$work/up.log" >&2; die "the stack did not come up"; }
 dc ps --format '{{.Service}}: {{.Status}}'
-echo "payments already in the database: $(psql 'select count(*) from payment')"
-[ "$(psql 'select count(*) from payment')" = 0 ] \
-  || die "the database is not fresh; run: docker compose -p $PROJECT down -v"
+payments="$(psql 'select count(*) from payment')"
+api_keys="$(psql 'select count(*) from api_key')"
+echo "already in the database: $payments payment(s), $api_keys API key(s)"
+# A first run that stopped half way leaves its keys (and maybe payments) behind; a second run would mint a second pair and
+# overwrite seed-keys.env, losing the first pair while it stays valid in the database.
+[ "$payments" = 0 ] && [ "$api_keys" = 0 ] \
+  || die "the database is not fresh (a previous seed stopped, or was never reset); from the repository root run: docker compose -p $PROJECT down -v, then scripts/seed.sh again"
 
 say "Minting two keys for merchant acme (not shown)"
 agent_key="$(mint agent admin)"
@@ -44,7 +48,7 @@ approver_key="$(mint approver)"
   { printf 'NKAP_AGENT_KEY=%s\n' "$agent_key"; printf 'NKAP_APPROVER_KEY=%s\n' "$approver_key"; } >"$OUT/seed-keys.env"
 )
 chmod 600 "$OUT/seed-keys.env"
-echo "written: seed-keys.env (mode $(stat -f '%Lp' "$OUT/seed-keys.env" 2>/dev/null || stat -c '%a' "$OUT/seed-keys.env"))"
+echo "written: seed-keys.env (mode $(stat -c '%a' "$OUT/seed-keys.env" 2>/dev/null || stat -f '%Lp' "$OUT/seed-keys.env"))"
 
 say "Posting simulator.json to the simulator"
 api POST "$SIMULATOR/_nkap/scenarios" "" "$(cat "$work/files/simulator.json")"
@@ -59,9 +63,8 @@ jq -r '.cases[] | .id as $c | .payments[] | [$c, .label, .amountMinor, .currency
   >"$work/payments.tsv"
 : >"$work/refs.tsv"
 while IFS=$'\t' read -r case_id label amount currency msisdn ending; do
-  payload="$(jq -nc --argjson amount "$amount" --arg currency "$currency" --arg msisdn "$msisdn" --arg label "$label" \
-    '{operation:"COLLECT", amount:$amount, currency:$currency, country:"cm", counterpartyMsisdn:$msisdn,
-      payerMessage:$label, payeeNote:$label}')"
+  payload="$(jq -nc --argjson amount "$amount" --arg currency "$currency" --arg msisdn "$msisdn" --arg note "$label" \
+    -f "$(dirname "${BASH_SOURCE[0]}")/seed-payment.jq")"
   api POST "$GATEWAY/payments" "$agent_key" "$payload" "seed-$case_id-$label"
   case "$status" in 201|202) ;; *) die "POST /payments for $case_id answered $status: $body" ;; esac
   ref="$(jq -r .reference <<<"$body")"
