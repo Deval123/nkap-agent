@@ -1,0 +1,84 @@
+{
+  "cases": [
+    {
+      "id": "duplicate-posting",
+      "payments": [
+        {
+          "label": "duplicate-posting",
+          "amountMinor": 4000,
+          "currency": "XAF",
+          "msisdn": "447700900002",
+          "ending": "ESCALATED"
+        }
+      ],
+      "statement": "duplicate-posting.csv",
+      "statementLines": 2
+    },
+    {
+      "id": "i-do-not-know",
+      "payments": [
+        {
+          "label": "unresolved",
+          "amountMinor": 6000,
+          "currency": "XAF",
+          "msisdn": "447700900005",
+          "ending": "ESCALATED"
+        }
+      ]
+    },
+    {
+      "id": "injection",
+      "payments": [
+        {
+          "label": "refused-at-submit",
+          "amountMinor": 3500,
+          "currency": "XAF",
+          "msisdn": "447700900004",
+          "ending": "FAILED"
+        }
+      ]
+    },
+    {
+      "id": "money-without-owner",
+      "payments": [
+        {
+          "label": "unrelated-settled",
+          "amountMinor": 2500,
+          "currency": "XAF",
+          "msisdn": "447700900003",
+          "ending": "SETTLED"
+        }
+      ],
+      "statement": "money-without-owner.csv",
+      "statementLines": 1
+    },
+    {
+      "id": "self-approval",
+      "payments": [
+        {
+          "label": "self-approval",
+          "amountMinor": 5500,
+          "currency": "XAF",
+          "msisdn": "447700900006",
+          "ending": "ESCALATED"
+        }
+      ],
+      "statement": "self-approval.csv",
+      "statementLines": 1
+    },
+    {
+      "id": "unrecorded-fee",
+      "payments": [
+        {
+          "label": "unrecorded-fee",
+          "amountMinor": 5000,
+          "currency": "XAF",
+          "msisdn": "447700900001",
+          "ending": "ESCALATED"
+        }
+      ],
+      "statement": "unrecorded-fee.csv",
+      "statementLines": 1
+    }
+  ]
+}
