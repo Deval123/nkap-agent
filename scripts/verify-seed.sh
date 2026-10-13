@@ -11,22 +11,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/stack-lib.sh"
 
 out="$(mktemp -d)"
 export SEED_OUT="$out"
-failures=0
 teardown() {
   dc down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$out"
 }
 trap teardown EXIT
-
-# expect DESCRIPTION ACTUAL EXPECTED
-expect() {
-  if [ "$2" = "$3" ]; then
-    printf '  ok    %s\n' "$1"
-  else
-    printf '  FAIL  %s: got [%s], expected [%s]\n' "$1" "$2" "$3" >&2
-    failures=$((failures + 1))
-  fi
-}
 
 say "Published ports, from docker compose config"
 ports() { docker compose --project-directory "$root" "$@" config --format json \
