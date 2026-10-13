@@ -143,6 +143,21 @@ public final class ProposalValidator {
         return new Verdict.Accepted(new Proposal(paymentReference, hypothesis, postings, evidence, answer.explanation()));
     }
 
+    /**
+     * The three accounts an adjustment may touch for the payment of this run, built from the provider and the
+     * currency in the trace, or empty if the trace does not name them in a form that is safe to repeat. Used to
+     * tell the model which accounts are allowed; none of it comes from the model.
+     */
+    public static List<String> allowedAccounts(Trace trace, String paymentReference) {
+        Optional<JsonNode> payment = payment(trace, paymentReference);
+        String provider = payment.map(p -> p.path("provider").asText("")).orElse("");
+        String currency = payment.map(p -> p.path("currency").asText("")).orElse("");
+        if (!provider.matches("[a-z0-9]+(-[a-z0-9]+)*") || provider.length() > 40 || !currency.matches("[A-Z]{3}")) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(AccountKind.values()).map(kind -> kind.account(provider, currency)).toList();
+    }
+
     /** The pointers that resolve, as references holding the trace's value. Each one that does not is a violation. */
     private static List<EvidenceRef> resolve(List<EvidencePointer> pointers, Trace trace, List<Violation> violations) {
         List<EvidenceRef> out = new ArrayList<>();

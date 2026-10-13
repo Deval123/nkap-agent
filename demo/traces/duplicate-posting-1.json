@@ -1,0 +1,319 @@
+{
+  "format": "nkap-agent-trace/1",
+  "recording": true,
+  "provenance": {
+    "date": "2026-10-13",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "case": "duplicate-posting",
+    "title": "The same money posted twice",
+    "run": 1,
+    "runs": 3,
+    "modelCalls": 4,
+    "promptTokens": 7420,
+    "completionTokens": 1913,
+    "costUsd": 0.003948,
+    "prices": {
+      "inputPerMillionUsd": 0.3,
+      "outputPerMillionUsd": 0.9
+    },
+    "elapsedMillis": 10531,
+    "expected": {
+      "outcome": "PROPOSE",
+      "hypothesis": "duplicate_posting",
+      "postings": [
+        {
+          "account": "suspense:mtn-cm:XAF",
+          "amountMinor": 4000,
+          "currency": "XAF"
+        },
+        {
+          "account": "provider:mtn-cm:float:XAF",
+          "amountMinor": -4000,
+          "currency": "XAF"
+        }
+      ]
+    },
+    "matched": true,
+    "judgement": "hypothesis right, entry right"
+  },
+  "steps": [
+    {
+      "type": "task",
+      "text": "Investigate payment 557bb654-ba77-4823-ac16-3e1210429040. The statement import f496a675-ce36-429f-b65d-85d55d78ea62 was loaded today."
+    },
+    {
+      "type": "model",
+      "callIndex": 1,
+      "millis": 1508,
+      "promptTokens": 1243,
+      "completionTokens": 246,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_payment",
+        "argument": "557bb654-ba77-4823-ac16-3e1210429040",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c1",
+      "tool": "get_payment",
+      "arguments": {
+        "reference": "557bb654-ba77-4823-ac16-3e1210429040"
+      },
+      "status": 200,
+      "fields": {
+        "reference": "557bb654-ba77-4823-ac16-3e1210429040",
+        "provider": "mtn-cm",
+        "merchantId": "acme",
+        "state": "UNKNOWN",
+        "operation": "COLLECT",
+        "amountMinorUnits": 4000,
+        "currency": "XAF",
+        "counterpartyMsisdn": "4477******02",
+        "providerReference": "",
+        "providerTransactionId": "",
+        "createdAt": "2026-10-13T17:49:27.509569Z",
+        "updatedAt": "2026-10-13T17:49:29.524874Z",
+        "detail": "The operator did not answer. The outcome is not yet known — poll GET /payments/557bb654-ba77-4823-ac16-3e1210429040 until it resolves.",
+        "refundOf": "",
+        "escalatedAt": "2026-10-13T17:49:35.230720Z",
+        "unresolvedSince": "2026-10-13T17:49:29.524874Z",
+        "history": [
+          {
+            "from": "CREATED",
+            "to": "UNKNOWN",
+            "at": "2026-10-13T17:49:29.524874Z",
+            "cause": "SUBMIT_RESPONSE",
+            "operatorCode": "",
+            "note": "MTN did not answer within PT2S"
+          }
+        ]
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 2,
+      "millis": 1384,
+      "promptTokens": 1714,
+      "completionTokens": 191,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_statement_findings",
+        "argument": "f496a675-ce36-429f-b65d-85d55d78ea62",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c2",
+      "tool": "get_statement_findings",
+      "arguments": {
+        "importId": "f496a675-ce36-429f-b65d-85d55d78ea62"
+      },
+      "status": 200,
+      "fields": {
+        "importId": "f496a675-ce36-429f-b65d-85d55d78ea62",
+        "provider": {
+          "value": "mtn-cm"
+        },
+        "sourceName": "duplicate-posting.csv",
+        "importedAt": "2026-10-13T17:49:43.737960Z",
+        "lineCount": 2,
+        "findings": [
+          {
+            "kind": "SUSPENSE_POSTED",
+            "operatorTransactionId": "FT-DP-0001",
+            "paymentReference": null,
+            "detail": "no payment holds FT-DP-0001; posted 4000 XAF: DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF"
+          },
+          {
+            "kind": "SUSPENSE_POSTED",
+            "operatorTransactionId": "FT-DP-0001-RETRY",
+            "paymentReference": null,
+            "detail": "no payment holds FT-DP-0001-RETRY; posted 4000 XAF: DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF"
+          }
+        ]
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 3,
+      "millis": 2588,
+      "promptTokens": 2080,
+      "completionTokens": 306,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_statement_lines",
+        "argument": "f496a675-ce36-429f-b65d-85d55d78ea62",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c3",
+      "tool": "get_statement_lines",
+      "arguments": {
+        "importId": "f496a675-ce36-429f-b65d-85d55d78ea62"
+      },
+      "status": 200,
+      "fields": {
+        "importId": "f496a675-ce36-429f-b65d-85d55d78ea62",
+        "lines": [
+          {
+            "operatorTransactionId": "FT-DP-0001",
+            "amountMinor": 4000,
+            "feeMinor": 0,
+            "currency": "XAF",
+            "occurredAt": "2026-10-13T11:00:00Z",
+            "status": "SETTLED"
+          },
+          {
+            "operatorTransactionId": "FT-DP-0001-RETRY",
+            "amountMinor": 4000,
+            "feeMinor": 0,
+            "currency": "XAF",
+            "occurredAt": "2026-10-13T11:00:00Z",
+            "status": "SETTLED"
+          }
+        ],
+        "lineCount": 2,
+        "truncated": false
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 4,
+      "millis": 5024,
+      "promptTokens": 2383,
+      "completionTokens": 1170,
+      "answer": {
+        "action": "final",
+        "tool": null,
+        "argument": null,
+        "outcome": "propose",
+        "hypothesis": "duplicate_posting",
+        "postings": [
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -4000,
+            "currency": "XAF"
+          },
+          {
+            "account": "suspense:mtn-cm:XAF",
+            "amountMinor": 4000,
+            "currency": "XAF"
+          }
+        ],
+        "evidence": [
+          {
+            "callId": "c3",
+            "path": "/lines/0/amountMinor"
+          },
+          {
+            "callId": "c3",
+            "path": "/lines/0/occurredAt"
+          },
+          {
+            "callId": "c3",
+            "path": "/lines/0/operatorTransactionId"
+          },
+          {
+            "callId": "c3",
+            "path": "/lines/1/amountMinor"
+          },
+          {
+            "callId": "c3",
+            "path": "/lines/1/occurredAt"
+          },
+          {
+            "callId": "c3",
+            "path": "/lines/1/operatorTransactionId"
+          },
+          {
+            "callId": "c2",
+            "path": "/findings/0/detail"
+          },
+          {
+            "callId": "c2",
+            "path": "/findings/1/detail"
+          }
+        ],
+        "explanation": "Two statement lines show identical amounts (4000 XAF) and timestamps with different operator transaction IDs (FT-DP-0001 and FT-DP-0001-RETRY). The findings indicate each resulted in a suspense posting (DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF), indicating the same movement was posted twice."
+      }
+    },
+    {
+      "type": "outcome",
+      "kind": "PROPOSED",
+      "paymentReference": "557bb654-ba77-4823-ac16-3e1210429040",
+      "hypothesis": "duplicate_posting",
+      "postings": [
+        {
+          "account": "provider:mtn-cm:float:XAF",
+          "amountMinor": -4000,
+          "currency": "XAF"
+        },
+        {
+          "account": "suspense:mtn-cm:XAF",
+          "amountMinor": 4000,
+          "currency": "XAF"
+        }
+      ],
+      "evidence": [
+        {
+          "callId": "c3",
+          "path": "/lines/0/amountMinor",
+          "value": "4000"
+        },
+        {
+          "callId": "c3",
+          "path": "/lines/0/occurredAt",
+          "value": "2026-10-13T11:00:00Z"
+        },
+        {
+          "callId": "c3",
+          "path": "/lines/0/operatorTransactionId",
+          "value": "FT-DP-0001"
+        },
+        {
+          "callId": "c3",
+          "path": "/lines/1/amountMinor",
+          "value": "4000"
+        },
+        {
+          "callId": "c3",
+          "path": "/lines/1/occurredAt",
+          "value": "2026-10-13T11:00:00Z"
+        },
+        {
+          "callId": "c3",
+          "path": "/lines/1/operatorTransactionId",
+          "value": "FT-DP-0001-RETRY"
+        },
+        {
+          "callId": "c2",
+          "path": "/findings/0/detail",
+          "value": "no payment holds FT-DP-0001; posted 4000 XAF: DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF"
+        },
+        {
+          "callId": "c2",
+          "path": "/findings/1/detail",
+          "value": "no payment holds FT-DP-0001-RETRY; posted 4000 XAF: DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF"
+        }
+      ],
+      "explanation": "Two statement lines show identical amounts (4000 XAF) and timestamps with different operator transaction IDs (FT-DP-0001 and FT-DP-0001-RETRY). The findings indicate each resulted in a suspense posting (DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF), indicating the same movement was posted twice."
+    }
+  ]
+}

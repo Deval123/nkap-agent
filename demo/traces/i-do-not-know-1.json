@@ -1,0 +1,142 @@
+{
+  "format": "nkap-agent-trace/1",
+  "recording": true,
+  "provenance": {
+    "date": "2026-10-13",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "case": "i-do-not-know",
+    "title": "Not enough evidence to say anything",
+    "run": 1,
+    "runs": 3,
+    "modelCalls": 3,
+    "promptTokens": 4895,
+    "completionTokens": 767,
+    "costUsd": 0.002159,
+    "prices": {
+      "inputPerMillionUsd": 0.3,
+      "outputPerMillionUsd": 0.9
+    },
+    "elapsedMillis": 4962,
+    "expected": {
+      "outcome": "NO_PROPOSAL"
+    },
+    "matched": true,
+    "judgement": "no_proposal, as expected"
+  },
+  "steps": [
+    {
+      "type": "task",
+      "text": "Investigate payment 8f0c802e-cc87-47aa-b2ed-ed543eaaa08d. The statement import 00000000-0000-0000-0000-000000000000 was loaded today."
+    },
+    {
+      "type": "model",
+      "callIndex": 1,
+      "millis": 1295,
+      "promptTokens": 1244,
+      "completionTokens": 192,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_payment",
+        "argument": "8f0c802e-cc87-47aa-b2ed-ed543eaaa08d",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c1",
+      "tool": "get_payment",
+      "arguments": {
+        "reference": "8f0c802e-cc87-47aa-b2ed-ed543eaaa08d"
+      },
+      "status": 200,
+      "fields": {
+        "reference": "8f0c802e-cc87-47aa-b2ed-ed543eaaa08d",
+        "provider": "mtn-cm",
+        "merchantId": "acme",
+        "state": "UNKNOWN",
+        "operation": "COLLECT",
+        "amountMinorUnits": 6000,
+        "currency": "XAF",
+        "counterpartyMsisdn": "4477******05",
+        "providerReference": "",
+        "providerTransactionId": "",
+        "createdAt": "2026-10-13T17:49:29.611011Z",
+        "updatedAt": "2026-10-13T17:49:31.616306Z",
+        "detail": "The operator did not answer. The outcome is not yet known — poll GET /payments/8f0c802e-cc87-47aa-b2ed-ed543eaaa08d until it resolves.",
+        "refundOf": "",
+        "escalatedAt": "2026-10-13T17:49:37.278864Z",
+        "unresolvedSince": "2026-10-13T17:49:31.616306Z",
+        "history": [
+          {
+            "from": "CREATED",
+            "to": "UNKNOWN",
+            "at": "2026-10-13T17:49:31.616306Z",
+            "cause": "SUBMIT_RESPONSE",
+            "operatorCode": "",
+            "note": "MTN did not answer within PT2S"
+          }
+        ]
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 2,
+      "millis": 1732,
+      "promptTokens": 1703,
+      "completionTokens": 284,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_statement_findings",
+        "argument": "00000000-0000-0000-0000-000000000000",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c2",
+      "tool": "get_statement_findings",
+      "arguments": {
+        "importId": "00000000-0000-0000-0000-000000000000"
+      },
+      "status": 404,
+      "fields": {
+        "type": "https://nkap.dev/problems/statement-import-not-found",
+        "title": "No such import",
+        "status": 404,
+        "detail": "No statement import has id 00000000-0000-0000-0000-000000000000.",
+        "instance": "/statements/imports/00000000-0000-0000-0000-000000000000"
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 3,
+      "millis": 1915,
+      "promptTokens": 1948,
+      "completionTokens": 291,
+      "answer": {
+        "action": "final",
+        "tool": null,
+        "argument": null,
+        "outcome": "no_proposal",
+        "hypothesis": null,
+        "postings": [ ],
+        "evidence": [ ],
+        "explanation": "Statement import ID 00000000-0000-0000-0000-000000000000 does not exist, so no statement lines or findings are available to evaluate for unrecorded fees or duplicate postings."
+      }
+    },
+    {
+      "type": "outcome",
+      "kind": "NO_PROPOSAL",
+      "explanation": "Statement import ID 00000000-0000-0000-0000-000000000000 does not exist, so no statement lines or findings are available to evaluate for unrecorded fees or duplicate postings.",
+      "droppedCitations": 0
+    }
+  ]
+}
