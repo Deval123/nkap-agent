@@ -379,6 +379,16 @@ Nkap refuses) leaves the run open and counts as an attempt: three at most, then 
 result of a refused attempt says how many are left (`attemptsLeft`). Every attempt, and the check of the payment that goes with it,
 runs under one lock held for at most one call to Nkap (10 seconds), so two requests on one run cannot both reach Nkap as a decision.
 
+## Deploying the demonstration
+
+[`deploy/RUNBOOK.md`](deploy/RUNBOOK.md) is the runbook for running the demonstration on one small VPS, reachable only through a Cloudflare tunnel, with
+live runs off unless the operator turns them on. `deploy/` holds the `Dockerfile` of the service, `compose.demo.yaml` (a layer over
+`compose.yaml`: an internal network with no outbound access for the database, the simulator and the gateway, an edge network for the service and
+the tunnel, no published port, read-only containers with no capability, secrets as files) and `compose.live.yaml` (adds the model key and turns live
+on; leaving it out is the kill switch). `scripts/reset-demo.sh` restores the demo ledger to its seeded state, and `scripts/verify-deploy.sh` checks the
+structure locally with a fake tunnel in place of `cloudflared`. The runbook lists what only the operator can check on the VPS and in Cloudflare.
+The tunnel image's digest is a marked placeholder that the operator fills in, and `scripts/verify-deploy.sh` fails until it is.
+
 ## Build
 
 Requires Java 21 and Maven.
