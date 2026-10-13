@@ -17,6 +17,10 @@ import java.util.regex.Pattern;
  */
 public final class AgentTools {
 
+    /** The names under which the model may ask for a tool; the single list the schema and the CLI both use. */
+    public static final java.util.List<String> TOOL_NAMES =
+            java.util.List.of("get_payment", "get_statement_findings", "search_docs");
+
     private static final System.Logger LOG = System.getLogger("dev.nkap.agent.tools");
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern UUID = Pattern.compile(
