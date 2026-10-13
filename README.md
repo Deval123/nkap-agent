@@ -210,6 +210,43 @@ the line, and the fee is cited as `/lines/0/feeMinor`. Against the real seeded s
 gives each case's expected answer, **6 of 6 matched, one run each**. That is a check of the tools, the validator and the seed
 together, not of the model: no model was involved, and Nebius was not called.
 
+## Approval
+
+The loop ends in a checked proposal and sends nothing to Nkap. `dev.nkap.agent.approval` is the step after it: the
+agent **proposes** with its key, and a **different** key **approves**, or Nkap refuses.
+
+- `AdjustmentProposer` holds the agent's key (`NKAP_AGENT_KEY`) and can `POST /adjustments` and `GET` adjustments,
+  nothing else. It has no approve and no reject.
+- `AdjustmentApprover` holds the approver's key (`NKAP_APPROVER_KEY`, a non-admin key of the same merchant) and can
+  only `POST /adjustments/{uuid}/approve` and `/reject`. The id is a parsed UUID.
+- Each client has an allowlist of method and path, checked before any request, and tested with traversal, an
+  encoded slash, a non-UUID, a trailing slash, a query string and every other route. Each asks for its key on every
+  request and holds it in no field, follows no redirect, reads at most 64 KB, retries nothing (a repeated POST could
+  repeat a decision), and accepts only `https` or a loopback address.
+- `ProposalRequest` is the one place a checked `Proposal` becomes Nkap's request body. Evidence is named by its call
+  and path, `c2/lines/0/feeMinor`, with the value the trace holds; `cites` lists the names. Nkap refuses a cited
+  entry with a blank value, so a blank one is left out, and with none left nothing is sent. Nkap's documentation has
+  no example body, so the golden test uses the shape of the body Nkap's own test sends and its OpenAPI describes.
+- A refusal from Nkap is a code and a **fixed text** chosen by the problem type. The server's title and detail are
+  never shown; a type from elsewhere, an unknown one, a type on a status it is not documented for, or a body that is
+  not JSON is `unexpected`, with the status number only.
+- The loop and the tools are never given either client, and a test fails if any class but the approval command refers
+  to the approver. `ApprovalCli` is the command that runs a case from a file of scripted answers (no model) to a
+  decision; `scripts/verify-approval.sh` runs it against a throwaway seeded stack.
+
+**The approval is bound to a key (its id), not to a person.** Nkap compares the key that proposed with the key that
+decides; it does not know who holds either. In this demonstration the visitor stands in for the approver, and the
+demonstration's backend holds the approver key next to the agent key, so the separation shown is **Nkap's server
+rule, not two separate machines**. In a real deployment the approver key belongs to the approver's own system, and
+the agent's process would never hold it.
+
+**The other known weakness is the agent's key.** It is an admin key, because the agent also reads statement imports,
+so it can reach admin routes that the approver's key cannot (webhook replay, for one, which sends outbound HTTP).
+What keeps that harmless here: the gateway publishes no port in `compose.yaml`, the demonstration registers no
+webhook endpoint (so a replay finds nowhere to send), and the clients' allowlists give this code no way to call any
+other route with it. The first two depend on the stack; the third is a property of this code, tested. If an endpoint
+is registered or the gateway is published, the first two are gone.
+
 ## Build
 
 Requires Java 21 and Maven.

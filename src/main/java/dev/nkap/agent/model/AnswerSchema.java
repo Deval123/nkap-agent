@@ -159,7 +159,7 @@ public final class AnswerSchema {
             "postings", "evidence", "explanation");
 
     /** Holds the text the model produced to the schema, and returns the answer it holds. */
-    static ModelAnswer parse(String content) throws SchemaViolation {
+    public static ModelAnswer parse(String content) throws SchemaViolation {
         JsonNode root;
         try {
             root = JSON.readTree(content);
