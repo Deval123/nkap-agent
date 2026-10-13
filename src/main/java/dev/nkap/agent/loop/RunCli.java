@@ -31,6 +31,9 @@ import java.util.Map;
  * results kept in a directory that git ignores. The model key is {@code NEBIUS_API_KEY}; the gateway key is
  * {@code NKAP_AGENT_KEY}, as for {@code ToolsCli}.
  *
+ * <p>The table and the totals go to standard output and nothing else does. The log goes to standard error at
+ * WARNING, or at INFO with {@code --verbose}.
+ *
  * <p>{@code fake-data DIR} writes what {@code scripts/verify-run.sh} needs to run it with no model.
  */
 public final class RunCli {
@@ -65,7 +68,7 @@ public final class RunCli {
         if (args.length >= 1 && args[0].equals("run")) {
             return runCases(args, env, out, err);
         }
-        err.println("usage: RunCli run --manifest FILE [--runs K] [--max-calls N] [--results-dir DIR] [--model ID] [--max-tokens N]"
+        err.println("usage: RunCli run --manifest FILE [--runs K] [--max-calls N] [--results-dir DIR] [--model ID] [--max-tokens N] [--verbose]"
                 + " | RunCli fake-data DIR");
         return 2;
     }
@@ -77,12 +80,18 @@ public final class RunCli {
 
     private static int runCases(String[] args, Map<String, String> env, PrintStream out, PrintStream err) {
         Map<String, String> options = new java.util.HashMap<>();
+        boolean verbose = false;
         for (int i = 1; i < args.length; i++) {
+            if (args[i].equals("--verbose")) {
+                verbose = true;
+                continue;
+            }
             if (!args[i].startsWith("--") || i + 1 >= args.length) {
                 return refuse(err, "an option is --name value.");
             }
             options.put(args[i].substring(2), args[++i]);
         }
+        configureLogging(verbose);
         String modelKey = env.get("NEBIUS_API_KEY");
         if (modelKey == null || modelKey.isBlank()) {
             return refuse(err, "NEBIUS_API_KEY is not set.");
@@ -220,6 +229,20 @@ public final class RunCli {
             err.println("run: STOPPED, " + model.stopReason() + "; " + done + " of " + targets.size() * runs + " run(s) were made.");
         }
         return matched == targets.size() * runs ? 0 : 1;
+    }
+
+    /**
+     * The tools and the model log through {@code System.Logger}, which the JDK sends to its logger and so to
+     * standard error. The table goes to standard output; the log is kept below it by default and shown at
+     * INFO with {@code --verbose}. The classes that log are not touched: only the JDK logger's level is.
+     */
+    static void configureLogging(boolean verbose) {
+        java.util.logging.Level level = verbose ? java.util.logging.Level.INFO : java.util.logging.Level.WARNING;
+        java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
+        root.setLevel(level);
+        for (java.util.logging.Handler handler : root.getHandlers()) {
+            handler.setLevel(level);
+        }
     }
 
     private static Integer boundedInt(String text, int min, int max) {

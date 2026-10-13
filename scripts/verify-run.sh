@@ -79,9 +79,18 @@ expect "the injection sentence reached the model in both runs, inside a block" "
 expect "and nothing follows the harness's closing tag" "$(grep -c '</tool_result>$' <<<"$injected")" "2"
 expect "a case with no statement import is told so by the gateway: the nil import answers 404, and the run still ends as expected" \
   "$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "injection" or .case == "i-do-not-know") | .record.toolCalls[1].status' | sort -u)" "404"
+expect "standard output holds only the table and the totals: no log line" \
+  "$(grep -c -E '^(INFO|WARNING|SEVERE|[A-Z][a-z]{2} [0-9]{1,2}, [0-9]{4})' "$work/out" || true)" "0"
+expect "the log is quiet by default: no INFO line on standard error" "$(grep -c 'INFO:' "$work/err" || true)" "0"
 leftovers="$(cat "$work/out" "$work/err" "$work"/results/* "$work/model.log" "$work/gateway.log")"
 expect "no key in any output, record or log" "$(grep -c -e "$MODEL_KEY" -e "$AGENT_KEY" <<<"$leftovers" || true)" "0"
 expect "the fake reasoning text is in none of them" "$(grep -c 'FAKE-REASONING-TEXT' <<<"$leftovers" || true)" "0"
+
+say "--verbose turns the log on, on standard error, and leaves standard output as it was"
+runner -- --runs 1 --max-calls 100 --verbose
+expect "exit 0" "$code" "0"
+expect "30 INFO lines are on standard error (6 runs x 3 model calls and 2 tool calls)" "$(grep -c 'INFO:' "$work/err")" "30"
+expect "none is on standard output" "$(grep -c -E '^(INFO|[A-Z][a-z]{2} [0-9]{1,2}, [0-9]{4})' "$work/out" || true)" "0"
 
 say "A model that books the entry of the measured run for the unrecorded fee"
 stop_servers; start gateway; start model script-wrong.json
