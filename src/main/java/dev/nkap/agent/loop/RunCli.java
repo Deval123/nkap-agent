@@ -40,6 +40,9 @@ import java.util.Map;
 public final class RunCli {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    /** The model the runner uses unless --model says otherwise; the results file does not record the model. */
+    public static final String DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b";
+
     private static final int ASSUMED_PROMPT_TOKENS = 8000;
 
     /**
@@ -157,7 +160,7 @@ public final class RunCli {
 
         Path statements = statementsDir(options, Path.of(options.get("manifest")));
         String gatewayUrl = env.getOrDefault("NKAP_GATEWAY_URL", "http://127.0.0.1:8080");
-        String modelId = options.getOrDefault("model", "nvidia/nemotron-3-super-120b-a12b");
+        String modelId = options.getOrDefault("model", DEFAULT_MODEL);
         Path resultsDir = Path.of(options.getOrDefault("results-dir", "run-results"));
 
         int planned = Math.min(maxCalls, targets.size() * runs * AgentLoop.Limits.defaults().maxCalls());
