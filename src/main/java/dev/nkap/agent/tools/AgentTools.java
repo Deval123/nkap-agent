@@ -23,11 +23,34 @@ public final class AgentTools {
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
     private final GatewayClient gateway;
+    private final DocsIndex docs;
     private final Trace trace;
 
-    public AgentTools(GatewayClient gateway, Trace trace) {
+    public AgentTools(GatewayClient gateway, DocsIndex docs, Trace trace) {
         this.gateway = gateway;
+        this.docs = docs;
         this.trace = trace;
+    }
+
+    /**
+     * Searches the local copy of Nkap's provider pages: at most three passages, each with its file, its
+     * heading and an excerpt. Offline; it makes no call of any kind.
+     */
+    public ToolResult searchDocs(String query) {
+        Map<String, String> arguments = new LinkedHashMap<>();
+        arguments.put("query", query == null ? "" : query);
+        if (query == null || query.isBlank()) {
+            return done(trace.record("search_docs", arguments, 0, error("invalid-argument", "query must not be blank")));
+        }
+        ObjectNode fields = JsonNodeFactory.instance.objectNode();
+        var results = fields.putArray("results");
+        for (DocsIndex.Hit hit : docs.search(query)) {
+            ObjectNode node = results.addObject();
+            node.put("file", hit.file());
+            node.put("heading", hit.heading());
+            node.put("excerpt", hit.excerpt());
+        }
+        return done(trace.record("search_docs", arguments, 200, fields, Redactor.DOC_LIMIT));
     }
 
     /** {@code GET /payments/{reference}}: state, transition history with cause and operator code, escalation. */

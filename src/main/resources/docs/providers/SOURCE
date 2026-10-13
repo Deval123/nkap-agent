@@ -1,0 +1,6 @@
+commit 1cbd8a404490968c961f4b301a815629aab574c8
+repository https://github.com/Deval123/nkap
+path docs/providers/
+sha256 420de8c295bb2cb8ee06d8d5aa0eab9c0dc3677bf94b36285f66efe895d8e2aa  m-pesa.md
+sha256 4969e72d69fe57a523b87c5985dc11afaab3a1bb4596a8e8cc2c4180e7f2c8e0  mtn.md
+sha256 036cfa850568b78895f5513ca5b964019ecee76e7c10b0c276da04e0b9107d72  orange-money.md

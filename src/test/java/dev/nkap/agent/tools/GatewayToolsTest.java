@@ -63,7 +63,7 @@ class GatewayToolsTest {
         server.start();
         client = new GatewayClient("http://127.0.0.1:" + server.getAddress().getPort(), () -> KEY);
         trace = new Trace();
-        tools = new AgentTools(client, trace);
+        tools = new AgentTools(client, DocsIndex.bundled(), trace);
     }
 
     @AfterEach
@@ -153,7 +153,7 @@ class GatewayToolsTest {
         try (ServerSocket s = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             closed = s.getLocalPort();
         }
-        AgentTools dead = new AgentTools(new GatewayClient("http://127.0.0.1:" + closed, () -> KEY), new Trace());
+        AgentTools dead = new AgentTools(new GatewayClient("http://127.0.0.1:" + closed, () -> KEY), DocsIndex.bundled(), new Trace());
         ToolResult r = dead.getPayment(REF);
         assertThat(r.status()).isZero();
         assertThat(r.fields().get("error").asText()).isEqualTo("gateway-unreachable");
@@ -186,7 +186,7 @@ class GatewayToolsTest {
     @DisplayName("with no agent key the result says so, nothing is sent, and the missing value is not invented")
     void keyMissing() {
         AgentTools none = new AgentTools(new GatewayClient("http://127.0.0.1:" + server.getAddress().getPort(), () -> ""),
-                new Trace());
+                DocsIndex.bundled(), new Trace());
         ToolResult r = none.getPayment(REF);
         assertThat(r.status()).isZero();
         assertThat(r.fields().get("error").asText()).isEqualTo("agent-key-missing");
