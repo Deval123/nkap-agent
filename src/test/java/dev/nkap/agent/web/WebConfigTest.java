@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -134,5 +135,24 @@ class WebConfigTest {
         env.put("NKAP_AGENT_INTERNAL_HOST", "Not A Host");
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> WebConfig.from(env)).hasMessageContaining("NKAP_AGENT_INTERNAL_HOST");
         assertThat(WebConfig.from(minimal()).internalHost()).isNull();
+    }
+
+    @Test
+    @DisplayName("the one plain-http host is one plain lower-case name: a dotted name, an uppercase one, an IP address, a list or a pattern is refused at start")
+    void internalHostIsOneName() {
+        for (String notAHost : List.of("gateway.internal", "Gateway", "10.0.0.5", "172.28.40.10", "127.0.0.1", "gate*", "gateway,other", ".*", "gateway:8080", "123")) {
+            Map<String, String> env = minimal();
+            env.put("NKAP_AGENT_INTERNAL_HOST", notAHost);
+            env.put("NKAP_GATEWAY_URL", "http://gateway:8080");
+            assertThatThrownBy(() -> WebConfig.from(env)).as(notAHost).hasMessageContaining("NKAP_AGENT_INTERNAL_HOST");
+        }
+        Map<String, String> env = minimal();
+        env.put("NKAP_AGENT_INTERNAL_HOST", "gateway");
+        for (String url : List.of("http://other:8080", "http://gateway.internal:8080", "http://Gateway:8080", "http://10.0.0.5:8080", "http://gateway2:8080")) {
+            env.put("NKAP_GATEWAY_URL", url);
+            assertThatThrownBy(() -> WebConfig.from(env)).as(url).hasMessageContaining("NKAP_GATEWAY_URL");
+        }
+        env.put("NKAP_GATEWAY_URL", "http://gateway:8080");
+        assertThat(WebConfig.from(env).internalHost()).isEqualTo("gateway");
     }
 }

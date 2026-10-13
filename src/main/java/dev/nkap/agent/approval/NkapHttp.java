@@ -42,8 +42,11 @@ final class NkapHttp {
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
-    /** A hostname the operator may name for plain http: lower-case labels, no dot at the end. */
-    static final String HOST = "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*";
+    /**
+     * The one name the operator may give for plain http: a single lower-case label that starts with a letter, so no dot, no
+     * upper-case letter and no IP address, and no list or pattern. It is compared to the address as text, whole.
+     */
+    static final String HOST = "[a-z]([a-z0-9-]{0,61}[a-z0-9])?";
 
     NkapHttp(String baseUrl, Supplier<String> key, BiPredicate<String, String> allowed, Duration timeout) {
         this(baseUrl, key, allowed, timeout, null);
@@ -55,7 +58,7 @@ final class NkapHttp {
      */
     NkapHttp(String baseUrl, Supplier<String> key, BiPredicate<String, String> allowed, Duration timeout, String plainHttpHost) {
         if (plainHttpHost != null && !plainHttpHost.matches(HOST)) {
-            throw new IllegalArgumentException("the plain-http host is a plain lower-case host name");
+            throw new IllegalArgumentException("the plain-http host is one plain lower-case name");
         }
         boolean safe = baseUrl != null && (baseUrl.matches("https://[A-Za-z0-9.-]+(:\\d{1,5})?(/.*)?")
                 || baseUrl.matches("http://(127\\.0\\.0\\.1|localhost)(:\\d{1,5})?/?")
