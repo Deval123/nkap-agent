@@ -99,6 +99,21 @@ public final class LiveBudget {
         }
     }
 
+    /** How many live runs are left today, or empty if the state cannot be read or trusted. Uses none, writes nothing. */
+    public synchronized java.util.Optional<Integer> remainingToday() {
+        try {
+            LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
+            State state = read(today);
+            if (state == null) {
+                return java.util.Optional.empty();
+            }
+            int count = state.day().equals(today.toString()) ? state.count() : 0;
+            return java.util.Optional.of(Math.max(0, dailyCap - count));
+        } catch (IOException | RuntimeException e) {
+            return java.util.Optional.empty();
+        }
+    }
+
     private Decision decide(String visitor) throws IOException {
         Instant now = clock.instant();
         LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);

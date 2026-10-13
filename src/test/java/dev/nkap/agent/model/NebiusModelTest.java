@@ -230,6 +230,30 @@ class NebiusModelTest {
         assertThat(seen).isEmpty();
     }
 
+    @Test
+    @DisplayName("a base URL that is neither https nor a loopback address is refused when the client is built: the key is not sent in clear")
+    void baseUrlMustBeSafe() {
+        for (String bad : new String[] {"http://example.invalid/v1/", "ftp://127.0.0.1/v1/", "api.example/v1", "", "http://127.0.0.1.evil.example/v1/",
+                "http://localhost.evil.example/"}) {
+            assertThatThrownBy(() -> new NebiusModel(bad, () -> KEY, MODEL, 100, Duration.ofSeconds(5))).as(bad)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        new NebiusModel("https://api.example/v1/", () -> KEY, MODEL, 100, Duration.ofSeconds(5));
+        new NebiusModel("http://127.0.0.1:8080/v1/", () -> KEY, MODEL, 100, Duration.ofSeconds(5));
+        new NebiusModel("http://localhost/v1/", () -> KEY, MODEL, 100, Duration.ofSeconds(5));
+    }
+
+    @Test
+    @DisplayName("a key with a CR or LF in it is a failure value, not an exception, and nothing is sent")
+    void keyWithLineBreak() {
+        for (String bad : List.of("abc\r\nX-Injected: yes", "abc\ndef", "abc\rdef")) {
+            ModelResult.Failed failure = failed(new NebiusModel(baseUrl(), () -> bad, MODEL, 100, Duration.ofSeconds(5)).next(messages));
+            assertThat(failure.reason()).isEqualTo(ModelResult.Reason.NO_KEY);
+            assertThat(failure.toString()).doesNotContain("abc");
+        }
+        assertThat(seen).isEmpty();
+    }
+
     // --- the answer
 
     @Test

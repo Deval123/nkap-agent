@@ -270,6 +270,115 @@ the salt is written or logged. It fails closed: a corrupt or unreadable state fi
 visitor means no live run, and a corrupt file is left as it was. This is the code only: the HTTP service that would
 call it is not built yet.
 
+## The service
+
+`dev.nkap.agent.web.AgentService` serves the agent over HTTP with one page, using the JDK's own server (no framework, no
+new dependency). Start it with `java -cp ... dev.nkap.agent.web.AgentService`; `scripts/verify-web.sh` does so against a
+throwaway seeded stack.
+
+### Routes (nothing else exists)
+
+| Route | What it does |
+| --- | --- |
+| `GET /`, `GET /app.js`, `GET /app.css` | The page, from this service, with no external request of any kind. |
+| `GET /api/status` | Whether live is on, and how many live runs are left today. Nothing else. |
+| `GET /api/recordings` | The published traces: id, case, title, outcome, matched. |
+| `GET /api/recordings/{id}` | One trace, replayed. The id is looked up in the list of published traces and never used to build a path. |
+| `POST /api/runs` | `{"case": "<catalogue id>", "mode": "scripted" or "live"}`. Runs the agent. |
+| `POST /api/runs/{runId}/approve` | The approver's key decides the proposal this run made. |
+| `POST /api/runs/{runId}/self-approve` | The agent's own key tries; Nkap is expected to refuse (403), and the refusal is shown with its fixed text. |
+
+A wrong method on one of these is 405 (with `Allow`), anything else is 404. There is no route to `try-unchecked`, and a test fails
+if any class of the `web` package refers to `ApprovalCli`.
+
+### Three modes, labelled on every step
+
+- **Recording**: a published trace played back from a file. No model, no gateway, no Nkap.
+- **Scripted**: the real loop, validator, tools and Nkap, with the catalogue's scripted answers instead of a model. The page says
+  "scripted answers, not a model" on every step. It costs nothing and exists so the approval flow can be tried without the live budget.
+- **Live**: the loop with the Nebius model, only if live is on and `LiveBudget` grants it.
+
+Each step of a run has `recording: false` and its `mode`; each step of a replay has `recording: true`. A run that ends in a
+proposal is written to Nkap by the proposer (the agent's key) and gets a `runId`: 128 random bits, kept in memory for 30 minutes, at
+most 50. The visitor never gives an adjustment id; the run id maps to the one this service created. A run takes one decision that Nkap took, and at most three attempts that it refused (below).
+
+### What a visitor can and cannot do
+
+They can watch recordings, start a scripted or (if on) a live run of one of the six catalogue cases, and decide the proposal their own
+run made, with the approver's key or with the agent's own. They cannot choose an adjustment, a payment, an account, an amount, a
+path, a model, a prompt or a key; they cannot reach any other Nkap route; and the page puts what the model and the tools wrote in the
+page with `textContent` only, labels the model's explanation "text written by the model, not checked", and the server cuts every
+string it returns at 2,000 characters.
+
+### Limits
+
+A request body is at most 1 KB, and a POST must be `application/json` (415 otherwise; 413 over the size). An `Origin`, when present, must
+match the `Host` (403 otherwise). The server has 16 threads, and at most 2 runs go at once (a third gets 429 `busy`). A run has the
+loop's own bounds. Scripted runs have a budget of their own (200 a day, a 20-second cooldown per visitor), live runs the default (40 a
+day, 5 minutes). Live is off unless a model key is configured and the model's base URL is https or loopback. A visitor is the socket address; only if
+the peer is the one proxy named in `NKAP_AGENT_TRUSTED_PROXY` is it the last `X-Forwarded-For` entry, and no other header is read. Every response has
+`Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none';
+frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`, and `Cache-Control: no-store` on `/api/*` and on errors. A
+request line the JDK server itself rejects as malformed (for instance a path of `//`) is answered by the JDK before this code, and without these headers.
+The log holds the method, the route shape and the status: no address, no body, no id, no model text.
+
+### Configuration (environment; a bad value stops the service at start, naming the variable and never the value)
+
+| Variable | Meaning |
+| --- | --- |
+| `NKAP_AGENT_MANIFEST` | Required. The seed's `seed-manifest.json`. |
+| `NKAP_AGENT_KEY` or `NKAP_AGENT_KEY_FILE` | Required. The agent's key. |
+| `NKAP_APPROVER_KEY` or `NKAP_APPROVER_KEY_FILE` | Required. The approver's key. |
+| `NKAP_AGENT_SALT` or `NKAP_AGENT_SALT_FILE` | Required. The secret salt that hashes a visitor. |
+| `NEBIUS_API_KEY` or `NEBIUS_API_KEY_FILE` | Optional. Without it, live is off. |
+| `NEBIUS_BASE_URL`, `NEBIUS_MODEL` | The model endpoint (https or loopback) and its id. |
+| `NKAP_GATEWAY_URL` | Nkap (default `http://127.0.0.1:8080`; https or loopback). |
+| `NKAP_STATEMENTS_DIR` | The statement files (default: `statements` beside the manifest). |
+| `NKAP_AGENT_TRACES_DIR` | The published traces (default `demo/traces`). |
+| `NKAP_AGENT_STATE_DIR` | Where the two budgets keep their state (default `state`). |
+| `NKAP_AGENT_PORT`, `NKAP_AGENT_BIND` | Default 8088 on 127.0.0.1. |
+| `NKAP_AGENT_TRUSTED_PROXY` | The one peer address allowed to name a visitor through `X-Forwarded-For`. |
+| `NKAP_AGENT_LIVE_DAILY_CAP`, `NKAP_AGENT_LIVE_COOLDOWN_SECONDS` | 40 and 300. |
+| `NKAP_AGENT_SCRIPTED_DAILY_CAP`, `NKAP_AGENT_SCRIPTED_COOLDOWN_SECONDS` | 200 and 20. |
+
+A key is read from its variable or its file each time it is used, never held in a field, never logged and never returned. Giving one both
+ways is an error.
+
+### One approved adjustment per payment: a rule of this service, not of Nkap
+
+Nkap does not stop a second adjustment on the same payment. `adjustment_proposal` has an index on the payment and no uniqueness rule,
+the entry's id is `adjustment:<the proposal's id>`, and nothing in `AdjustmentService.propose` looks at earlier proposals or
+decisions for the payment (Nkap's own observations, cases 6 and 12, show several proposals on one payment). Run the same case twice
+and approve both, and Nkap accepts both and writes two ledger entries for the same fee.
+
+So **this service applies a rule Nkap does not have**: it does not send `approve` for a payment that already has an approved adjustment.
+
+- **What happens when it applies.** The proposal is still created, so `self-approve` and Nkap's refusal of it stay available. `approve`
+  is answered `409 payment-already-approved` with this fixed text, and nothing is sent to Nkap: "An earlier visitor already approved an
+  adjustment for this payment in this demo ledger. Nkap would accept a second one; this service does not send it." The same text is in
+  the run's result (`approval.available: false`) when the run ends, so the page says it before the visitor clicks. The check is made
+  twice, at the end of the run and at the decision, and the second is under the same lock as the decision itself, so two visitors cannot
+  both pass it. The refusal does not close the run or count as an attempt.
+- **How the state is kept.** Nkap's adjustment routes cannot be asked which adjustments a payment has: `GET /adjustments` lists every
+  adjustment, with no filter, and its answer outgrows the clients' 64 KB cap after a few dozen proposals. So the service keeps a small
+  file, `approved-payments.json` in its state directory, of payment references and the id of the adjustment Nkap approved for each,
+  written when Nkap takes an approval (atomically, whole). **Nkap stays the source of truth**: at each check the service reads that
+  adjustment from Nkap (`GET /adjustments/{id}`, through the proposer's allowlist); if Nkap says it is approved, the payment is taken; if
+  Nkap no longer knows it, or knows it as not approved, the entry is stale and is forgotten. If the file is corrupt or unreadable, or Nkap
+  cannot be asked, the approval is refused (`503 unavailable`), as `LiveBudget` fails closed, and a corrupt file is left as it was.
+- **What it does not cover.** An approval made by anyone else (another client, a script, an operator) is not in the file, so this rule
+  does not see it.
+- **No route resets anything.** Resetting the demo ledger is an operator action that is not built yet. When it is, it has to clear this
+  file as well; until then an entry whose adjustment Nkap no longer has is forgotten on the next check, but nothing here deletes
+  Nkap's data or the file.
+
+### Decisions on a run
+
+A run takes one decision, closed only by a decision Nkap took. A refusal (`self-approve`, which Nkap refuses by design, or an `approve`
+Nkap refuses) leaves the run open and counts as an attempt: three at most, then `429 too-many-attempts` and Nkap is not asked. The
+result of a refused attempt says how many are left (`attemptsLeft`). Every attempt, and the check of the payment that goes with it,
+runs under one lock held for at most one call to Nkap (10 seconds), so two requests on one run cannot both reach Nkap as a decision.
+
 ## Build
 
 Requires Java 21 and Maven.

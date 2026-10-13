@@ -59,7 +59,7 @@ public final class RunCli {
         System.exit(run(args, System.getenv(), System.out, System.err));
     }
 
-    static int run(String[] args, Map<String, String> env, PrintStream out, PrintStream err) {
+    public static int run(String[] args, Map<String, String> env, PrintStream out, PrintStream err) {
         if (args.length == 2 && args[0].equals("fake-data")) {
             try {
                 FakeData.write(Path.of(args[1]));
