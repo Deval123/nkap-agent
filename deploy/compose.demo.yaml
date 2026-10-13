@@ -1,0 +1,143 @@
+# The demonstration on one VPS. It is a layer over the repository's own compose.yaml (the database, the simulator
+# and the gateway, built from the pinned Nkap commit), not a copy of it:
+#
+#   docker compose -f compose.yaml -f deploy/compose.demo.yaml up -d                          # live off
+#   docker compose -f compose.yaml -f deploy/compose.demo.yaml -f deploy/compose.live.yaml up -d   # live on
+#
+# What this layer adds:
+#
+#   * Two networks. `internal` has no outbound access (`internal: true`) and holds the database, the simulator and
+#     the gateway. `edge` holds the agent service and the tunnel. The agent is on both: it is the only way from the
+#     tunnel to the gateway, and the gateway has no way out.
+#   * Nothing publishes a port. The tunnel dials out; nothing dials in.
+#   * Every service restarts, has a read-only root file system with tmpfs where it needs to write, drops every
+#     capability (the database adds back the five its entrypoint needs to drop to its own user), forbids new
+#     privileges, and has memory and process limits and rotated logs.
+#   * Secrets are files under /run/secrets, mounted from DEMO_SECRETS_DIR on the host. They are never environment
+#     values and never in an image layer. The model key is only in compose.live.yaml.
+#
+# Host paths: DEMO_SECRETS_DIR (default /etc/nkap-agent/secrets) holds the secret files; DEMO_DATA_DIR (default
+# /srv/nkap-agent) holds the seed's output (seed-manifest.json and statements/), read-only in the agent. See RUNBOOK.md.
+#
+# Nothing in this file is a secret.
+
+name: nkap-agent-demo
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+networks:
+  internal:
+    internal: true
+  edge:
+    ipam:
+      config:
+        - subnet: 172.28.40.0/24
+
+volumes:
+  db-data: {}
+  agent-state: {}
+
+secrets:
+  agent_key:
+    file: ${DEMO_SECRETS_DIR:-/etc/nkap-agent/secrets}/agent-key
+  approver_key:
+    file: ${DEMO_SECRETS_DIR:-/etc/nkap-agent/secrets}/approver-key
+  visitor_salt:
+    file: ${DEMO_SECRETS_DIR:-/etc/nkap-agent/secrets}/visitor-salt
+  tunnel_token:
+    file: ${DEMO_SECRETS_DIR:-/etc/nkap-agent/secrets}/tunnel-token
+
+services:
+  db:
+    <<: *hardening
+    image: postgres:16.6-alpine@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
+    networks: [internal]
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    # The image's entrypoint starts as root and drops to the postgres user: it needs these five, and nothing else.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    mem_limit: 384m
+    pids_limit: 200
+
+  simulator:
+    <<: *hardening
+    networks: [internal]
+    tmpfs: [/tmp]
+    mem_limit: 512m
+    pids_limit: 200
+
+  gateway:
+    <<: *hardening
+    networks: [internal]
+    tmpfs: [/tmp]
+    mem_limit: 768m
+    pids_limit: 300
+
+  # A curl on the internal network, for scripts/seed.sh and the operator. Started only with `--profile tools`.
+  client:
+    image: curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+    networks: [internal]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m
+    pids_limit: 50
+
+  agent:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    networks: [internal, edge]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    environment:
+      # The gateway is on a network with no outbound access, under this name, reached over plain http: the one host
+      # for which the service accepts that.
+      NKAP_GATEWAY_URL: http://gateway:8080
+      NKAP_AGENT_INTERNAL_HOST: gateway
+      NKAP_AGENT_MANIFEST: /data/seed-manifest.json
+      NKAP_STATEMENTS_DIR: /data/statements
+      # The tunnel's address on `edge`, fixed below: the only peer allowed to name a visitor through X-Forwarded-For.
+      NKAP_AGENT_TRUSTED_PROXY: 172.28.40.10
+      NKAP_AGENT_KEY_FILE: /run/secrets/agent_key
+      NKAP_APPROVER_KEY_FILE: /run/secrets/approver_key
+      NKAP_AGENT_SALT_FILE: /run/secrets/visitor_salt
+    secrets: [agent_key, approver_key, visitor_salt]
+    volumes:
+      - agent-state:/state
+      - ${DEMO_DATA_DIR:-/srv/nkap-agent}:/data:ro
+    tmpfs: [/tmp]
+    mem_limit: 512m
+    pids_limit: 200
+
+  # cloudflared dials out to Cloudflare and carries requests to the agent, and to nothing else: `edge` holds only the
+  # agent and this container. The route (public host name to http://agent:8088) is set in Cloudflare, see RUNBOOK.md.
+  # The tunnel token is read from a file (--token-file), so it is in no environment, no argument list and no log.
+  tunnel:
+    <<: *hardening
+    # PLACEHOLDER digest (all zeros): the version and the digest are the operator's to fill in, see RUNBOOK.md.
+    # scripts/verify-deploy.sh fails while it is here.
+    image: cloudflare/cloudflared:2024.12.2@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/tunnel_token"]
+    networks:
+      edge:
+        ipv4_address: 172.28.40.10
+    depends_on:
+      agent:
+        condition: service_healthy
+    secrets: [tunnel_token]
+    mem_limit: 128m
+    pids_limit: 100
