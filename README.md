@@ -5,7 +5,8 @@ money gateway. It lives in its own repository so that nothing of it is merged in
 gateway and it can be removed without touching Nkap.
 
 **Status: under construction.** There is no agent yet. This repository currently holds
-the build, the working conventions and the CI.
+the build, the working conventions, the CI, and a local demo stack with its seed
+([`docs/demo-stack.md`](docs/demo-stack.md)).
 
 ## Build
 

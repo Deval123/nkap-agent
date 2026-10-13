@@ -10,8 +10,9 @@ mvn -q compile
 java -cp target/classes dev.nkap.agent.scenario.SeedFiles <empty directory>
 ```
 
-It writes `simulator.json` (the document to post to the simulator's `/_nkap/scenarios`) and one
-`<case-id>.csv` for each case that has statement lines. It refuses a directory that is not empty.
+It writes `simulator.json` (the document to post to the simulator's `/_nkap/scenarios`), `cases.json`
+(each case's payments, where they must end, the statement to import and the expected proposal, for the
+scripts in `scripts/`) and one `<case-id>.csv` for each case that has statement lines. It refuses a directory that is not empty.
 `GoldenFilesTest` compares the output with `src/test/resources/golden/`; when the catalogue changes on
 purpose, regenerate and read the diff.
 
