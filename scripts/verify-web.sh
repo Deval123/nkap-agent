@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Starts the HTTP service against a throwaway seeded stack, in scripted mode (no model, no Nebius key), and checks the
 # routes, the headers and the limits, one propose-and-approve round trip, one propose-and-self-approve round trip
-# (refused by Nkap, the ledger read before and after), and what Nkap does when the same case is run and approved twice.
+# (refused by Nkap, the ledger read before and after) followed by an approve on the same run, which must succeed, and that
+# approving twice for the same payment leaves exactly one adjustment entry (the service does not send the second).
 # Any failed expectation makes the exit code non-zero. The service and the stack are removed at the end.
 #
 # The stack is started with compose.dev.yaml so that the service, which runs on this machine, can reach the gateway; that
@@ -120,26 +121,43 @@ expect "its postings are fees +75 and float -75" "$(psql "select string_agg(acco
 call POST "/api/runs/$run1/approve" "{}"; expect "a second decision on the run is 409" "$status" "409"
 call POST "/api/runs/$(printf '0%.0s' $(seq 1 32))/approve" "{}"; expect "a guessed run id is 404" "$status" "404"
 
-say "Propose and self-approve: self-approval"
+say "Propose and self-approve: self-approval (a refusal leaves the run open)"
 e0="$(entries)"; p0="$(postings)"; d0="$(decisions)"
 call POST /api/runs '{"case":"self-approval","mode":"scripted"}'
 run2="$(jq -r .runId <<<"$body")"
+expect "approval is available for this payment" "$(jq -r '.approval.available' <<<"$body")" "true"
 call POST "/api/runs/$run2/self-approve" "{}"
 expect "the agent's own key is refused by Nkap" "$(jq -r '.result + " " + .code' <<<"$body")" "refused adjustment-self-approval"
 expect "with a fixed text" "$(jq -r '.text' <<<"$body" | grep -c 'different key')" "1"
+expect "and two attempts are left" "$(jq -r '.attemptsLeft' <<<"$body")" "2"
 expect "the ledger is unchanged: entries" "$(entries)" "$e0"
 expect "the ledger is unchanged: postings" "$(postings)" "$p0"
 expect "no decision was recorded" "$(decisions)" "$d0"
+call POST "/api/runs/$run2/approve" "{}"
+expect "the later approve on the same run succeeds" "$status $(jq -r .result <<<"$body")" "200 decided"
+expect "and Nkap wrote one entry" "$(( $(entries) - e0 ))" "1"
+call POST "/api/runs/$run2/self-approve" "{}"; expect "the run is now closed: 409" "$status" "409"
 
-say "What Nkap does when the same case is run and approved twice (observed, not worked around)"
-call POST /api/runs '{"case":"unrecorded-fee","mode":"scripted"}'
-expect "a second proposal for the same payment is accepted by Nkap" "$(jq -r '.proposal.status' <<<"$body")" "created"
-call POST "/api/runs/$(jq -r .runId <<<"$body")/approve" "{}"
-adj3="$(jq -r '.ledgerEntryId | sub("adjustment:"; "")' <<<"$body")"
+say "Approving twice for the same payment leaves one adjustment entry"
 ref="$(jq -r '.cases[] | select(.id == "unrecorded-fee") | .paymentReference' "$out/seed-manifest.json")"
-expect "Nkap approved it, and the one payment now has two adjustment entries" \
-  "$(psql "select count(*) from ledger_entry where reference = '$ref' and id like 'adjustment:%'")" "2"
-expect "the second is a different entry" "$([ "$adj1" != "$adj3" ] && echo yes || echo no)" "yes"
+call POST /api/runs '{"case":"unrecorded-fee","mode":"scripted"}'
+expect "a second proposal for the same payment is still created" "$(jq -r '.proposal.status' <<<"$body")" "created"
+expect "the run says, before any click, that approval is not available" "$(jq -r '.approval.available' <<<"$body")" "false"
+expect "with the fixed text" "$(jq -r '.approval.text' <<<"$body")" \
+  "An earlier visitor already approved an adjustment for this payment in this demo ledger. Nkap would accept a second one; this service does not send it."
+run3="$(jq -r .runId <<<"$body")"
+call POST "/api/runs/$run3/approve" "{}"
+expect "approve is refused by the service: 409 payment-already-approved" "$status $(jq -r .error <<<"$body")" "409 payment-already-approved"
+expect "with the same fixed text" "$(jq -r .text <<<"$body")" \
+  "An earlier visitor already approved an adjustment for this payment in this demo ledger. Nkap would accept a second one; this service does not send it."
+expect "the payment has exactly one adjustment entry" "$(psql "select count(*) from ledger_entry where reference = '$ref' and id like 'adjustment:%'")" "1"
+call POST "/api/runs/$run3/self-approve" "{}"
+expect "self-approve and Nkap's refusal stay available" "$(jq -r '.result + " " + .code' <<<"$body")" "refused adjustment-self-approval"
+call POST "/api/runs/$run3/approve" "{}"
+expect "the refusal did not close the run, and still holds" "$status" "409"
+expect "still one adjustment entry for the payment" "$(psql "select count(*) from ledger_entry where reference = '$ref' and id like 'adjustment:%'")" "1"
+expect "the service's record names no secret: payment references and adjustment ids only" \
+  "$(grep -c -v -E '^\{"payments":\{("[0-9a-f-]{36}":"[0-9a-f-]{36}",?)+\}\}$' "$out/state/approved-payments.json" || true)" "0"
 
 say "Concurrency and budgets"
 call POST /api/runs '{"case":"injection","mode":"scripted"}'; expect "a case with no proposal has no run id" "$(jq -r 'has("runId")' <<<"$body")" "false"

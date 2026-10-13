@@ -300,12 +300,12 @@ if any class of the `web` package refers to `ApprovalCli`.
 
 Each step of a run has `recording: false` and its `mode`; each step of a replay has `recording: true`. A run that ends in a
 proposal is written to Nkap by the proposer (the agent's key) and gets a `runId`: 128 random bits, kept in memory for 30 minutes, at
-most 50. The visitor never gives an adjustment id; the run id maps to the one this service created. One decision per run.
+most 50. The visitor never gives an adjustment id; the run id maps to the one this service created. A run takes one decision that Nkap took, and at most three attempts that it refused (below).
 
 ### What a visitor can and cannot do
 
 They can watch recordings, start a scripted or (if on) a live run of one of the six catalogue cases, and decide the proposal their own
-run made, once, with the approver's key or with the agent's own. They cannot choose an adjustment, a payment, an account, an amount, a
+run made, with the approver's key or with the agent's own. They cannot choose an adjustment, a payment, an account, an amount, a
 path, a model, a prompt or a key; they cannot reach any other Nkap route; and the page puts what the model and the tools wrote in the
 page with `textContent` only, labels the model's explanation "text written by the model, not checked", and the server cuts every
 string it returns at 2,000 characters.
@@ -344,14 +344,40 @@ The log holds the method, the route shape and the status: no address, no body, n
 A key is read from its variable or its file each time it is used, never held in a field, never logged and never returned. Giving one both
 ways is an error.
 
-### A problem this service cannot fix: Nkap does not stop a second adjustment on the same payment
+### One approved adjustment per payment: a rule of this service, not of Nkap
 
-Run the same case twice, approving each time, and Nkap accepts both. `adjustment_proposal` has an index on the payment, not a uniqueness
-rule, the entry's id is `adjustment:<the proposal's id>`, and nothing in `AdjustmentService.propose` looks at earlier proposals or
-decisions for the payment (Nkap's own observations, cases 6 and 12, show two proposals on one payment). So a demonstration that many
-visitors run on the same case writes **a ledger entry per approval for the same fee**: the demo ledger double-books it.
-`scripts/verify-web.sh` observes this on a throwaway stack (the second proposal is accepted, and the payment ends with two adjustment
-entries). Nothing here works around it, resets anything or limits it beyond the budgets above, and the next step is a decision for the maintainer.
+Nkap does not stop a second adjustment on the same payment. `adjustment_proposal` has an index on the payment and no uniqueness rule,
+the entry's id is `adjustment:<the proposal's id>`, and nothing in `AdjustmentService.propose` looks at earlier proposals or
+decisions for the payment (Nkap's own observations, cases 6 and 12, show several proposals on one payment). Run the same case twice
+and approve both, and Nkap accepts both and writes two ledger entries for the same fee.
+
+So **this service applies a rule Nkap does not have**: it does not send `approve` for a payment that already has an approved adjustment.
+
+- **What happens when it applies.** The proposal is still created, so `self-approve` and Nkap's refusal of it stay available. `approve`
+  is answered `409 payment-already-approved` with this fixed text, and nothing is sent to Nkap: "An earlier visitor already approved an
+  adjustment for this payment in this demo ledger. Nkap would accept a second one; this service does not send it." The same text is in
+  the run's result (`approval.available: false`) when the run ends, so the page says it before the visitor clicks. The check is made
+  twice, at the end of the run and at the decision, and the second is under the same lock as the decision itself, so two visitors cannot
+  both pass it. The refusal does not close the run or count as an attempt.
+- **How the state is kept.** Nkap's adjustment routes cannot be asked which adjustments a payment has: `GET /adjustments` lists every
+  adjustment, with no filter, and its answer outgrows the clients' 64 KB cap after a few dozen proposals. So the service keeps a small
+  file, `approved-payments.json` in its state directory, of payment references and the id of the adjustment Nkap approved for each,
+  written when Nkap takes an approval (atomically, whole). **Nkap stays the source of truth**: at each check the service reads that
+  adjustment from Nkap (`GET /adjustments/{id}`, through the proposer's allowlist); if Nkap says it is approved, the payment is taken; if
+  Nkap no longer knows it, or knows it as not approved, the entry is stale and is forgotten. If the file is corrupt or unreadable, or Nkap
+  cannot be asked, the approval is refused (`503 unavailable`), as `LiveBudget` fails closed, and a corrupt file is left as it was.
+- **What it does not cover.** An approval made by anyone else (another client, a script, an operator) is not in the file, so this rule
+  does not see it.
+- **No route resets anything.** Resetting the demo ledger is an operator action that is not built yet. When it is, it has to clear this
+  file as well; until then an entry whose adjustment Nkap no longer has is forgotten on the next check, but nothing here deletes
+  Nkap's data or the file.
+
+### Decisions on a run
+
+A run takes one decision, closed only by a decision Nkap took. A refusal (`self-approve`, which Nkap refuses by design, or an `approve`
+Nkap refuses) leaves the run open and counts as an attempt: three at most, then `429 too-many-attempts` and Nkap is not asked. The
+result of a refused attempt says how many are left (`attemptsLeft`). Every attempt, and the check of the payment that goes with it,
+runs under one lock held for at most one call to Nkap (10 seconds), so two requests on one run cannot both reach Nkap as a decision.
 
 ## Build
 
