@@ -1,0 +1,2 @@
+operator_transaction_id,amount_minor,fee_minor,currency,occurred_at,status
+FT-SA-0001,5500,80,XAF,2026-10-13T13:00:00Z,SETTLED

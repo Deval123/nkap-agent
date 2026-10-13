@@ -1,0 +1,2 @@
+operator_transaction_id,amount_minor,fee_minor,currency,occurred_at,status
+FT-UF-0001,5000,75,XAF,2026-10-13T10:00:00Z,SETTLED
