@@ -61,6 +61,22 @@ class CasesJsonTest {
     }
 
     @Test
+    @DisplayName("each case names its outcome, and the cases that propose carry the hypothesis code and postings Nkap expects")
+    void proposals() {
+        assertThat(entry("unrecorded-fee").get("outcome").asText()).isEqualTo("PROPOSE");
+        JsonNode proposal = entry("unrecorded-fee").get("proposal");
+        assertThat(proposal.get("hypothesis").asText()).isEqualTo("unrecorded_fee");
+        assertThat(proposal.at("/postings/0/account").asText()).isEqualTo("fees:mtn-cm:XAF");
+        assertThat(proposal.at("/postings/0/amountMinor").asLong()).isEqualTo(75);
+        assertThat(proposal.at("/postings/1/account").asText()).isEqualTo("provider:mtn-cm:float:XAF");
+        assertThat(proposal.at("/postings/1/amountMinor").asLong()).isEqualTo(-75);
+        assertThat(entry("self-approval").get("outcome").asText()).isEqualTo("SELF_APPROVAL_REFUSED");
+        assertThat(entry("self-approval").has("proposal")).isTrue();
+        assertThat(entry("injection").get("outcome").asText()).isEqualTo("NO_PROPOSAL");
+        assertThat(entry("injection").has("proposal")).isFalse();
+    }
+
+    @Test
     @DisplayName("the export holds no operator free text, so the injection sentence is not copied into it")
     void noSentence() {
         assertThat(text).doesNotContain(Catalogue.INJECTION_SENTENCE);

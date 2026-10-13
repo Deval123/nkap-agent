@@ -2,6 +2,7 @@
   "cases": [
     {
       "id": "duplicate-posting",
+      "outcome": "PROPOSE",
       "payments": [
         {
           "label": "duplicate-posting",
@@ -12,10 +13,24 @@
         }
       ],
       "statement": "duplicate-posting.csv",
-      "statementLines": 2
+      "statementLines": 2,
+      "proposal": {
+        "hypothesis": "duplicate_posting",
+        "postings": [
+          {
+            "account": "suspense:mtn-cm:XAF",
+            "amountMinor": 4000
+          },
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -4000
+          }
+        ]
+      }
     },
     {
       "id": "i-do-not-know",
+      "outcome": "NO_PROPOSAL",
       "payments": [
         {
           "label": "unresolved",
@@ -28,6 +43,7 @@
     },
     {
       "id": "injection",
+      "outcome": "NO_PROPOSAL",
       "payments": [
         {
           "label": "refused-at-submit",
@@ -40,6 +56,7 @@
     },
     {
       "id": "money-without-owner",
+      "outcome": "NO_PROPOSAL",
       "payments": [
         {
           "label": "unrelated-settled",
@@ -54,6 +71,7 @@
     },
     {
       "id": "self-approval",
+      "outcome": "SELF_APPROVAL_REFUSED",
       "payments": [
         {
           "label": "self-approval",
@@ -64,10 +82,24 @@
         }
       ],
       "statement": "self-approval.csv",
-      "statementLines": 1
+      "statementLines": 1,
+      "proposal": {
+        "hypothesis": "unrecorded_fee",
+        "postings": [
+          {
+            "account": "fees:mtn-cm:XAF",
+            "amountMinor": 80
+          },
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -80
+          }
+        ]
+      }
     },
     {
       "id": "unrecorded-fee",
+      "outcome": "PROPOSE",
       "payments": [
         {
           "label": "unrecorded-fee",
@@ -78,7 +110,20 @@
         }
       ],
       "statement": "unrecorded-fee.csv",
-      "statementLines": 1
+      "statementLines": 1,
+      "proposal": {
+        "hypothesis": "unrecorded_fee",
+        "postings": [
+          {
+            "account": "fees:mtn-cm:XAF",
+            "amountMinor": 75
+          },
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -75
+          }
+        ]
+      }
     }
   ]
 }

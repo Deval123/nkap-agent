@@ -9,7 +9,7 @@ import java.util.Map;
 /**
  * Renders {@code cases.json}: what a seed needs to create each case's payments, which statement to import,
  * and where each payment must end. It is the catalogue as data for the shell scripts, so they never retype
- * an amount or a number. Cases are in order of id; a case with no statement has neither key.
+ * an amount or a number. Cases are in order of id; a case with no statement has neither key, and a case that expects no proposal has no {@code proposal}.
  */
 final class CasesJson {
 
@@ -37,11 +37,25 @@ final class CasesJson {
         }
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("id", c.id());
+        entry.put("outcome", c.outcome().name());
         entry.put("payments", payments);
         if (!c.lines().isEmpty()) {
             entry.put("statement", c.id() + ".csv");
             entry.put("statementLines", c.lines().size());
         }
+        c.proposal().ifPresent(p -> {
+            List<Object> postings = new ArrayList<>();
+            for (ExpectedPosting posting : p.postings()) {
+                Map<String, Object> side = new LinkedHashMap<>();
+                side.put("account", posting.account());
+                side.put("amountMinor", posting.amountMinor());
+                postings.add(side);
+            }
+            Map<String, Object> proposal = new LinkedHashMap<>();
+            proposal.put("hypothesis", p.hypothesis().code());
+            proposal.put("postings", postings);
+            entry.put("proposal", proposal);
+        });
         return entry;
     }
 }
