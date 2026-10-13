@@ -112,7 +112,8 @@ same for all six cases; tests fail if a case name, an amount or an expected outc
 - A tool call goes through `AgentTools`. The same tool with the same argument twice is not run again; the
   model is told which call holds the result. An argument that is not a UUID comes back as an error result.
 - A final answer goes to the validator. If it breaks a rule the model gets one repair message, made of the
-  rules' fixed texts, and a second broken answer ends the run as `REJECTED`. A model failure ends the run as
+  rules' fixed texts (for an account that is not allowed, with the three accounts that are, built from the payment
+  in the trace and never from the model's answer), and a second broken answer ends the run as `REJECTED`. A model failure ends the run as
   `FAILED` with its reason, with no retry; a `length` finish is such a failure.
 - `RunRecord` keeps every message sent, each model call with its tokens and time, each tool call as the model
   saw it, and the outcome. `toJson()` is stable. It holds no key, because the loop never has one.
@@ -246,6 +247,28 @@ What keeps that harmless here: the gateway publishes no port in `compose.yaml`, 
 webhook endpoint (so a replay finds nowhere to send), and the clients' allowlists give this code no way to call any
 other route with it. The first two depend on the stack; the third is a property of this code, tested. If an endpoint
 is registered or the gateway is published, the first two are gone.
+
+## Recordings, and the live budget
+
+**What is a recording.** The traces under [`demo/traces/`](demo/traces/) are recordings of runs made on 2026-10-13: each
+file says it is one (`"recording": true`), and `TraceReplay` marks every step it yields as a recording and puts the
+provenance (date, model, run n of K, tokens, cost, the catalogue's expectation, whether the run matched) in the first
+item. A replay reads a file and calls no model and no gateway. **Everything the demonstration plays back from these
+files is a recording; only a run started under the live budget below is live.**
+
+**17 of 18.** In the measurement those traces come from (the six cases, three runs each, after the statement-lines
+tool), 17 of 18 runs matched the catalogue. Seven runs are published, chosen by a rule written before looking: the
+first run of each case, and the one run that did not match, which ended `REJECTED` because the model wrote the same
+mistyped account twice. [`demo/README.md`](demo/README.md) has the rule, the run ids, the table, and the caveats:
+eighteen runs of one model on six cases are a small sample, the model id is the runner's default (the results file
+does not record it), and that recording predates the repair message that now names the allowed accounts.
+
+**The live budget.** `LiveBudget` caps live runs per UTC day (default 40) and per visitor (a cooldown, default
+5 minutes), both set by the service and not by a visitor. The state is one small file, so a restart does not reset
+it. A visitor is an HMAC of what the service sees of the client, keyed with a secret salt; neither the address nor
+the salt is written or logged. It fails closed: a corrupt or unreadable state file, a missing salt, or a blank
+visitor means no live run, and a corrupt file is left as it was. This is the code only: the HTTP service that would
+call it is not built yet.
 
 ## Build
 
