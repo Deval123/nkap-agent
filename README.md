@@ -12,19 +12,32 @@ the loop with its check of a final answer.
 
 ## What the agent can read
 
-The agent has three tools, in `dev.nkap.agent.tools`. Each one reads state the gateway already holds,
-and none of them causes an outbound call to an operator.
+The agent has four tools, in `dev.nkap.agent.tools`. Three tools read the gateway (or, for `search_docs`, a local
+copy of documentation), with the admin key weakness named below; the fourth reads a file the operator uploaded.
+None of them causes a call to an operator.
 
 | Tool | Reads | Needs |
 | --- | --- | --- |
 | `get_payment(reference)` | `GET /payments/{reference}`: state, transition history with `cause` and `operatorCode`, `escalatedAt` | the agent's key |
 | `get_statement_findings(importId)` | `GET /statements/imports/{importId}`: the reconciliation report | an admin key |
+| `get_statement_lines(importId)` | the statement file the operator uploaded, kept by the agent's own service as `<importId>.csv`: the lines, with the amount and the fee of each. No gateway call | nothing |
 | `search_docs(query)` | a local copy of Nkap's `docs/providers/` pages, pinned to the commit the stack is built from, searched offline | nothing |
 
 **`get_balance` is not offered, on purpose.** `GET /balance` makes the gateway ask the operator for
 its balance, with the gateway's own credentials, so calling it would be an outbound call caused by the
 agent. No demonstration case needs it. (Observed: against the simulator the answer depends on the
 balance the simulator holds, and a mismatch comes back as an operator-did-not-answer error.)
+
+What `get_statement_lines` does and does not do. The model gives an import id, a UUID; the service maps it to
+`<statements-dir>/<importId>.csv`, a name built from the parsed UUID alone, so no path comes from the model. A
+symlink, a directory or any file that is not a regular file reads nothing and is "not found"; a file over 64 KB is
+refused. At most 200 lines are returned (`truncated` says if there were more); the importer in Nkap sets no limit
+of its own, so these caps are ours. A cell is a string or an integer and is never evaluated; an amount or fee that
+is not an integer is null, not guessed. The result passes through the same masking and the same block as every
+other tool. It reads: nothing in its classes writes, or touches the network or the gateway client (a test reads
+their bytecode for that). It does **not** check that the file is the one the gateway imported: the id is the
+link, and the seed, which copies each file it imports under the id the gateway gave it, is what keeps the two
+together. A file put in the directory by hand under another id would be read as it is.
 
 What is proved, and by what:
 
@@ -69,7 +82,7 @@ If a webhook endpoint is ever registered, or the gateway is published, the prote
 
 `dev.nkap.agent.model` puts the model behind `AgentModel.next(messages)`, which returns an answer with its
 token usage, or a failure as a value. The model's answer is one strict JSON schema, the same on every turn:
-an `action` that is either `call_tool` (one of the three tools and an argument) or `final` (an outcome, a
+an `action` that is either `call_tool` (one of the tools and an argument) or `final` (an outcome, a
 hypothesis, postings, evidence and an explanation). The model never writes a request to the gateway, and
 evidence is a list of `(callId, path)` pointers; the value is read from the trace by the harness, so the
 model's rendering of it is never what is checked. Free text there is refused by the parser. The parser reads
@@ -88,7 +101,7 @@ The reasoning text the provider returns is never read. Tests against a fake serv
 
 ## The loop
 
-`dev.nkap.agent.loop.AgentLoop` runs the model against the three tools. One system prompt
+`dev.nkap.agent.loop.AgentLoop` runs the model against the four tools. One system prompt
 (`src/main/resources/prompts/system.md`, with the entry of each hypothesis rendered from the catalogue) and one
 task template (`Investigate payment {reference}. The statement import {importId} was loaded today.`) are the
 same for all six cases; tests fail if a case name, an amount or an expected outcome appears in either.
@@ -189,14 +202,13 @@ fake gateway, and fails if a wrong entry is not shown as a mismatch.
 names the nil UUID (`00000000-0000-0000-0000-000000000000`) as the import; the gateway answers 404 to it, and
 the model reads that as the tool result it is. The sentence "was loaded today" is then untrue for these two.
 
-**A gap in the demonstration.** The statement findings the seeded stack returns do not carry the fee of a line
+**The fee is on the statement line.** The gateway's finding for a line says what was posted and nothing of the fee
 (see `docs/nkap-observations.md`, case 11), and the validator requires the entry's amount to appear in a cited
-value. For `unrecorded-fee` and `self-approval` the amount is a fee, so unless the fee reaches the agent some
-other way, the validator refuses a correct entry. Observed, once, with a scripted model that gives each case's
-expected answer, against the real seeded stack (no Nebius involved): 4 of 6 runs matched, and `unrecorded-fee`
-and `self-approval` were `REJECTED` with `evidence-amount-absent`, because the finding reads `posted 5000 XAF`
-and says nothing of the fee. `scripts/verify-run.sh` uses a fake gateway whose findings name the fee, so it does
-not show this. Where the fee should come from is a decision for a later issue.
+value, so for `unrecorded-fee` and `self-approval`, where the amount is a fee, a correct entry was refused (4 of 6
+cases matched, once, with a scripted model against the real seeded stack). `get_statement_lines` shows the agent
+the line, and the fee is cited as `/lines/0/feeMinor`. Against the real seeded stack with a scripted model that
+gives each case's expected answer, **6 of 6 matched, one run each**. That is a check of the tools, the validator and the seed
+together, not of the model: no model was involved, and Nebius was not called.
 
 ## Build
 

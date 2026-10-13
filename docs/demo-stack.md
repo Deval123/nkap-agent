@@ -15,10 +15,12 @@ The first run builds the gateway and the simulator from the Nkap commit pinned i
 are not used: the `latest` image is 2.1.0 and answers `404` to `GET /adjustments`, because the
 adjustment API is unreleased.
 
-`scripts/seed.sh` writes two files, to the repository root or to `$SEED_OUT`, and git ignores both:
+`scripts/seed.sh` writes these, to the repository root or to `$SEED_OUT`, and git ignores them:
 
 - `seed-keys.env`, mode `600`: `NKAP_AGENT_KEY` (admin) and `NKAP_APPROVER_KEY` (not admin), both for
   merchant `acme`. This is the only place the keys exist. They are never printed.
+- `statements/<importId>.csv`: a copy of each statement the seed imported, under the import id the gateway
+  gave it. This is what the agent's `get_statement_lines` tool reads; the seed prints none of it.
 - `seed-manifest.json`: for each case, the payment reference and the statement import id (`null` when
   the case has no statement).
 
