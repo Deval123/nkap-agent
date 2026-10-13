@@ -389,6 +389,186 @@ class AgentServiceTest {
         assertThat(h.ledgerEntries).hasValue(1);
     }
 
+    // --- one approved adjustment per payment
+
+    private static final String ALREADY = "An earlier visitor already approved an adjustment for this payment in this demo ledger. "
+            + "Nkap would accept a second one; this service does not send it.";
+
+    @Test
+    @DisplayName("a second approval for a payment that already has an approved adjustment is 409 with the fixed text, and is not sent to Nkap")
+    void noDoubleBooking() throws Exception {
+        start();
+        String first = h.run("unrecorded-fee", "scripted").json().get("runId").asText();
+        assertThat(h.post("/api/runs/" + first + "/approve", "{}").status()).isEqualTo(200);
+        JsonNode second = h.run("unrecorded-fee", "scripted").json();
+        assertThat(second.get("proposal").get("status").asText()).as("the proposal is still created").isEqualTo("created");
+        String secondId = second.get("runId").asText();
+        int posts = h.decisionPosts.size();
+        ServiceHarness.Reply refused = h.post("/api/runs/" + secondId + "/approve", "{}");
+        assertThat(refused.status()).isEqualTo(409);
+        assertThat(refused.json().get("error").asText()).isEqualTo("payment-already-approved");
+        assertThat(refused.json().get("text").asText()).isEqualTo(ALREADY);
+        assertThat(h.decisionPosts).as("it was not sent").hasSize(posts);
+        assertThat(h.ledgerEntries).hasValue(1);
+        assertThat(h.post("/api/runs/" + secondId + "/approve", "{}").status()).as("still the run's to try, not closed or counted").isEqualTo(409);
+        JsonNode self = h.post("/api/runs/" + secondId + "/self-approve", "{}").json();
+        assertThat(self.get("result").asText()).as("self-approve and its refusal stay available").isEqualTo("refused");
+        assertThat(self.get("code").asText()).isEqualTo("adjustment-self-approval");
+    }
+
+    @Test
+    @DisplayName("the run says, when it ends, whether approval is available, so the page can say it before the visitor clicks")
+    void runEndSaysWhetherApprovalIsAvailable() throws Exception {
+        start();
+        JsonNode first = h.run("unrecorded-fee", "scripted").json();
+        assertThat(first.get("approval").get("available").asBoolean()).isTrue();
+        assertThat(h.post("/api/runs/" + first.get("runId").asText() + "/approve", "{}").status()).isEqualTo(200);
+        JsonNode second = h.run("unrecorded-fee", "scripted").json();
+        assertThat(second.get("approval").get("available").asBoolean()).isFalse();
+        assertThat(second.get("approval").get("code").asText()).isEqualTo("payment-already-approved");
+        assertThat(second.get("approval").get("text").asText()).isEqualTo(ALREADY);
+        assertThat(h.run("self-approval", "scripted").json().get("approval").get("available").asBoolean()).as("another payment").isTrue();
+        assertThat(h.run("injection", "scripted").json().has("approval")).as("nothing proposed, nothing to approve").isFalse();
+    }
+
+    @Test
+    @DisplayName("two visitors approving at once for the same payment cannot both pass: one is decided, the other is 409, and the ledger gets one entry")
+    void concurrentVisitorsSamePayment() throws Exception {
+        start();
+        List<String> runs = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            runs.add(h.run("unrecorded-fee", "scripted").json().get("runId").asText());
+        }
+        ExecutorService pool = Executors.newFixedThreadPool(6);
+        try {
+            List<Future<ServiceHarness.Reply>> replies = new ArrayList<>();
+            for (String run : runs) {
+                replies.add(pool.submit(() -> h.post("/api/runs/" + run + "/approve", "{}")));
+            }
+            int decided = 0;
+            int refused = 0;
+            for (Future<ServiceHarness.Reply> f : replies) {
+                ServiceHarness.Reply r = f.get(30, TimeUnit.SECONDS);
+                if (r.status() == 200) {
+                    decided++;
+                } else if (r.status() == 409 && r.json().get("error").asText().equals("payment-already-approved")) {
+                    refused++;
+                }
+            }
+            assertThat(decided).isEqualTo(1);
+            assertThat(refused).isEqualTo(5);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(h.ledgerEntries).hasValue(1);
+        assertThat(h.decisionPosts).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("different payments do not hold each other up: each case can be approved once")
+    void otherPaymentsAreFree() throws Exception {
+        start();
+        for (String c : List.of("unrecorded-fee", "duplicate-posting", "self-approval")) {
+            String run = h.run(c, "scripted").json().get("runId").asText();
+            assertThat(h.post("/api/runs/" + run + "/approve", "{}").status()).as(c).isEqualTo(200);
+        }
+        assertThat(h.ledgerEntries).hasValue(3);
+    }
+
+    @Test
+    @DisplayName("the rule survives a restart of the service, because the state is in a file and Nkap confirms it")
+    void survivesARestart() throws Exception {
+        start();
+        String first = h.run("unrecorded-fee", "scripted").json().get("runId").asText();
+        h.post("/api/runs/" + first + "/approve", "{}");
+        h.service.close();
+        ServiceHarness.Reply after = restartAndRun();
+        assertThat(after.status()).isEqualTo(409);
+        assertThat(after.json().get("error").asText()).isEqualTo("payment-already-approved");
+    }
+
+    private ServiceHarness.Reply restartAndRun() throws Exception {
+        ServiceHarness old = h;
+        Map<String, String> env = new java.util.HashMap<>();
+        env.put("NKAP_AGENT_PORT", "0");
+        env.put("NKAP_AGENT_MANIFEST", dir.resolve("manifest.json").toString());
+        env.put("NKAP_GATEWAY_URL", old.nkap.url());
+        env.put("NKAP_AGENT_KEY", ServiceHarness.AGENT_KEY);
+        env.put("NKAP_APPROVER_KEY", ServiceHarness.APPROVER_KEY);
+        env.put("NKAP_AGENT_SALT", ServiceHarness.SALT);
+        env.put("NKAP_AGENT_STATE_DIR", dir.resolve("state").toString());
+        env.put("NKAP_AGENT_TRACES_DIR", "demo/traces");
+        env.put("NKAP_AGENT_SCRIPTED_COOLDOWN_SECONDS", "0");
+        AgentService restarted = AgentService.start(WebConfig.from(env), null, clock);
+        try {
+            java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
+            java.util.function.BiFunction<String, String, java.net.http.HttpResponse<String>> post = (path, body) -> {
+                try {
+                    return http.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + restarted.port() + path))
+                            .header("Content-Type", "application/json").POST(java.net.http.HttpRequest.BodyPublishers.ofString(body)).build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString());
+                } catch (Exception e) {
+                    throw new AssertionError(e);
+                }
+            };
+            String run = ServiceHarness.JSON.readTree(post.apply("/api/runs", "{\"case\":\"unrecorded-fee\",\"mode\":\"scripted\"}").body()).get("runId").asText();
+            java.net.http.HttpResponse<String> r = post.apply("/api/runs/" + run + "/approve", "{}");
+            return new ServiceHarness.Reply(r.statusCode(), r.body(), r.headers().map());
+        } finally {
+            restarted.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Nkap is the source of truth: if it no longer knows the adjustment on record (a reset), the payment is free again; if it cannot be asked, the approval is refused")
+    void nkapConfirmsTheRecord() throws Exception {
+        start();
+        String first = h.run("unrecorded-fee", "scripted").json().get("runId").asText();
+        h.post("/api/runs/" + first + "/approve", "{}");
+        String second = h.run("unrecorded-fee", "scripted").json().get("runId").asText();
+
+        h.readsFail = true;
+        ServiceHarness.Reply unreadable = h.post("/api/runs/" + second + "/approve", "{}");
+        assertThat(unreadable.status()).isEqualTo(503);
+        assertThat(unreadable.json().get("error").asText()).isEqualTo("unavailable");
+        assertThat(h.ledgerEntries).hasValue(1);
+        h.readsFail = false;
+
+        h.gone.addAll(h.decided.keySet());
+        ServiceHarness.Reply free = h.post("/api/runs/" + second + "/approve", "{}");
+        assertThat(free.status()).as("the earlier adjustment is gone, so this payment has none approved").isEqualTo(200);
+        assertThat(h.ledgerEntries).hasValue(2);
+    }
+
+    @Test
+    @DisplayName("a corrupt state file fails closed: approval is refused as unavailable, the run says so, the file is left as it was; self-approve still shows its refusal")
+    void corruptStateFile() throws Exception {
+        Files.createDirectories(dir.resolve("state"));
+        Files.writeString(dir.resolve("state/approved-payments.json"), "garbage");
+        start();
+        JsonNode run = h.run("unrecorded-fee", "scripted").json();
+        assertThat(run.get("approval").get("available").asBoolean()).isFalse();
+        assertThat(run.get("approval").get("code").asText()).isEqualTo("unavailable");
+        String runId = run.get("runId").asText();
+        ServiceHarness.Reply approve = h.post("/api/runs/" + runId + "/approve", "{}");
+        assertThat(approve.status()).isEqualTo(503);
+        assertThat(h.ledgerEntries).hasValue(0);
+        assertThat(h.post("/api/runs/" + runId + "/self-approve", "{}").json().get("code").asText()).isEqualTo("adjustment-self-approval");
+        assertThat(Files.readString(dir.resolve("state/approved-payments.json"))).isEqualTo("garbage");
+    }
+
+    @Test
+    @DisplayName("there is no route that resets, deletes or clears anything")
+    void noResetRoute() throws Exception {
+        start();
+        for (String path : List.of("/api/reset", "/api/runs/reset", "/api/approved", "/api/state", "/api/ledger", "/api/admin/reset")) {
+            for (String method : List.of("GET", "POST", "DELETE", "PUT")) {
+                assertThat(h.call(method, path, method.equals("GET") || method.equals("DELETE") ? null : "{}", "Content-Type", "application/json").status())
+                        .as(method + " " + path).isEqualTo(404);
+            }
+        }
+    }
+
     @Test
     @DisplayName("a decision needs a run this service made: a guessed id, a malformed one and an expired one are 404, all alike")
     void runIdGuessing() throws Exception {

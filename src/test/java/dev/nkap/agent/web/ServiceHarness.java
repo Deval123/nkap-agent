@@ -57,7 +57,10 @@ final class ServiceHarness implements AutoCloseable {
     final java.util.List<String> proposalBodies = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** The bearer of every approve or reject POST that reached the fake Nkap, in order. */
     final java.util.List<String> decisionPosts = new java.util.concurrent.CopyOnWriteArrayList<>();
-
+    /** Adjustments the fake has "lost", as after an operator's reset: a read of one is a 404. */
+    final java.util.Set<String> gone = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** While true, a read of an adjustment is a 500. */
+    volatile boolean readsFail;
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
     ServiceHarness(Path dir, Consumer<Map<String, String>> tweak, Supplier<AgentModel> liveModel, Clock clock) throws Exception {
@@ -100,6 +103,19 @@ final class ServiceHarness implements AutoCloseable {
             String id = UUID.randomUUID().toString();
             proposedBy.put(id, bearer);
             return new FakeNkap.Answer(201, "{\"id\":\"" + id + "\",\"status\":\"pending\",\"hypothesis\":\"unrecorded_fee\"}");
+        }
+        java.util.regex.Matcher one = java.util.regex.Pattern.compile("/adjustments/([0-9a-f-]{36})").matcher(path);
+        if (r.method().equals("GET") && one.matches()) {
+            String id = one.group(1);
+            if (readsFail) {
+                return new FakeNkap.Answer(500, "{}");
+            }
+            if (!proposedBy.containsKey(id) || gone.contains(id)) {
+                return new FakeNkap.Answer(404, problem("adjustment-not-found"));
+            }
+            boolean approved = decided.containsKey(id);
+            return new FakeNkap.Answer(200, "{\"id\":\"" + id + "\",\"status\":\"" + (approved ? "approved" : "pending") + "\",\"hypothesis\":\"unrecorded_fee\""
+                    + (approved ? ",\"ledgerEntryId\":\"adjustment:" + id + "\"" : "") + "}");
         }
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("/adjustments/([0-9a-f-]{36})/(approve|reject)").matcher(path);
         if (r.method().equals("POST") && m.matches()) {

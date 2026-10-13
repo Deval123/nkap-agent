@@ -8,6 +8,7 @@ import dev.nkap.agent.approval.AdjustmentApprover;
 import dev.nkap.agent.approval.AdjustmentProposer;
 import dev.nkap.agent.approval.DecisionResult;
 import dev.nkap.agent.approval.ProposalResult;
+import dev.nkap.agent.approval.ReadResult;
 import dev.nkap.agent.approval.ScriptedAnswers;
 import dev.nkap.agent.live.LiveBudget;
 import dev.nkap.agent.loop.AgentLoop;
@@ -61,7 +62,8 @@ final class RunService {
         }
     }
 
-
+    /** Whether an approval may be sent for a payment. */
+    private enum Approval { AVAILABLE, ALREADY_APPROVED, UNAVAILABLE }
 
     /** A request that was refused, as a status, a code and a fixed text. */
     record Refusal(int status, String code, String text, long retryAfterSeconds) {
@@ -78,10 +80,15 @@ final class RunService {
         }
     }
 
+    private static final System.Logger LOG = System.getLogger("dev.nkap.agent.web");
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MAX_AT_ONCE = 2;
     /** Attempts on one run that Nkap refused, after which the run takes no more. */
     static final int MAX_ATTEMPTS = 3;
+    static final String ALREADY_APPROVED_TEXT = "An earlier visitor already approved an adjustment for this payment in this demo ledger. "
+            + "Nkap would accept a second one; this service does not send it.";
+    static final String UNAVAILABLE_TEXT = "The service could not check whether this payment already has an approved adjustment, "
+            + "so it does not send the approval.";
     static final String TOO_MANY_TEXT = "This run has used its three attempts.";
 
     private final WebConfig config;
@@ -92,10 +99,12 @@ final class RunService {
     private final RunTable<Pending> runs;
     private final Semaphore running = new Semaphore(MAX_AT_ONCE);
     /**
-     * Held around every attempt to decide: two requests on one run cannot both reach Nkap as a decision. It is held for
-     * one call to Nkap at most (10 seconds).
+     * Held around every attempt to decide, and around the check of the payment that goes with it: the check and the call
+     * to Nkap are one step, so two visitors cannot both pass the check for the same payment, and two requests on one run
+     * cannot both reach Nkap as a decision. It is held for one call to Nkap at most (10 seconds).
      */
     private final ReentrantLock decisions = new ReentrantLock();
+    private final ApprovedPayments approved;
     private final GatewayClient gateway;
     private final AdjustmentProposer proposer;
 
@@ -108,6 +117,7 @@ final class RunService {
         this.runs = new RunTable<>(50, Duration.ofMinutes(30), clock);
         this.gateway = new GatewayClient(config.gatewayUrl(), config.agentKey());
         this.proposer = new AdjustmentProposer(config.gatewayUrl(), config.agentKey());
+        this.approved = new ApprovedPayments(config.stateDir().resolve("approved-payments.json"));
     }
 
     boolean liveEnabled() {
@@ -185,6 +195,14 @@ final class RunService {
             if (result instanceof ProposalResult.Created created) {
                 proposal.put("status", "created");
                 body.put("runId", runs.put(new Pending(created.id(), reference)));
+                ObjectNode approval = body.putObject("approval");
+                Approval state = approvalFor(reference, true);
+                approval.put("available", state == Approval.AVAILABLE);
+                if (state == Approval.ALREADY_APPROVED) {
+                    approval.put("code", "payment-already-approved").put("text", ALREADY_APPROVED_TEXT);
+                } else if (state == Approval.UNAVAILABLE) {
+                    approval.put("code", "unavailable").put("text", UNAVAILABLE_TEXT);
+                }
             } else {
                 ProposalResult.Refused refused = (ProposalResult.Refused) result;
                 proposal.put("status", "refused").put("code", refused.code()).put("text", refused.text());
@@ -196,8 +214,45 @@ final class RunService {
     }
 
     /**
+     * Whether an approval may be sent for this payment: not if the service has seen Nkap approve an adjustment for it
+     * and Nkap still says that adjustment is approved. An entry Nkap no longer knows, or knows as not approved, is
+     * stale and is forgotten. If the record or Nkap cannot be read the answer is "unavailable", which refuses.
+     */
+    private Approval approvalFor(String reference, boolean takeLock) {
+        if (takeLock) {
+            decisions.lock();
+        }
+        try {
+            ApprovedPayments.Lookup lookup = approved.lookup(reference);
+            if (!lookup.available()) {
+                return Approval.UNAVAILABLE;
+            }
+            if (lookup.adjustment().isEmpty()) {
+                return Approval.AVAILABLE;
+            }
+            ReadResult read = proposer.get(lookup.adjustment().get());
+            if (read instanceof ReadResult.Found found) {
+                if (found.view().status().equals("approved")) {
+                    return Approval.ALREADY_APPROVED;
+                }
+                approved.forget(reference);
+                return Approval.AVAILABLE;
+            }
+            if (read instanceof ReadResult.Refused refused && refused.code().equals("adjustment-not-found")) {
+                approved.forget(reference);
+                return Approval.AVAILABLE;
+            }
+            return Approval.UNAVAILABLE;
+        } finally {
+            if (takeLock) {
+                decisions.unlock();
+            }
+        }
+    }
+
+    /**
      * An attempt to decide a run. Only a decision Nkap took closes the run; a refusal leaves it open, counted, up to
-     * {@link #MAX_ATTEMPTS}.
+     * {@link #MAX_ATTEMPTS}. An approval is not sent for a payment that already has an approved adjustment.
      * {@code self} tries it with the agent's own key, which Nkap is expected to refuse.
      */
     Result decide(String runId, boolean self) {
@@ -214,6 +269,15 @@ final class RunService {
             if (pending.attempts >= MAX_ATTEMPTS) {
                 return Result.refused(429, "too-many-attempts", TOO_MANY_TEXT);
             }
+            if (!self) {
+                Approval state = approvalFor(pending.paymentReference, false);
+                if (state == Approval.ALREADY_APPROVED) {
+                    return Result.refused(409, "payment-already-approved", ALREADY_APPROVED_TEXT);
+                }
+                if (state == Approval.UNAVAILABLE) {
+                    return Result.refused(503, "unavailable", UNAVAILABLE_TEXT);
+                }
+            }
             pending.attempts++;
             AdjustmentApprover approver = new AdjustmentApprover(config.gatewayUrl(), self ? config.agentKey() : config.approverKey());
             DecisionResult result = approver.approve(pending.adjustmentId);
@@ -221,6 +285,9 @@ final class RunService {
             body.put("decision", self ? "self-approve" : "approve");
             if (result instanceof DecisionResult.Decided decided) {
                 pending.decided = true;
+                if (!approved.record(pending.paymentReference, pending.adjustmentId)) {
+                    LOG.log(System.Logger.Level.WARNING, "an approval was taken but could not be recorded");
+                }
                 body.put("result", "decided").put("ledgerEntryId", decided.ledgerEntryId());
             } else {
                 DecisionResult.Refused refused = (DecisionResult.Refused) result;
