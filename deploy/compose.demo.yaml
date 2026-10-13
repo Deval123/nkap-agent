@@ -17,7 +17,8 @@
 #     values and never in an image layer. The model key is only in compose.live.yaml.
 #
 # Host paths: DEMO_SECRETS_DIR (default /etc/nkap-agent/secrets) holds the secret files; DEMO_DATA_DIR (default
-# /srv/nkap-agent) holds the seed's output (seed-manifest.json and statements/), read-only in the agent. See RUNBOOK.md.
+# /srv/nkap-agent) holds the seed's output; the agent sees seed-manifest.json and statements/ from it, read-only, and nothing else.
+# See RUNBOOK.md.
 #
 # Nothing in this file is a secret.
 
@@ -118,7 +119,9 @@ services:
     secrets: [agent_key, approver_key, visitor_salt]
     volumes:
       - agent-state:/state
-      - ${DEMO_DATA_DIR:-/srv/nkap-agent}:/data:ro
+      # Only what the service reads, not the whole directory: seed-keys.env is beside them and must not be visible.
+      - ${DEMO_DATA_DIR:-/srv/nkap-agent}/seed-manifest.json:/data/seed-manifest.json:ro
+      - ${DEMO_DATA_DIR:-/srv/nkap-agent}/statements:/data/statements:ro
     tmpfs: [/tmp]
     mem_limit: 512m
     pids_limit: 200

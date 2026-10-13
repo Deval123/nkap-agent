@@ -1,0 +1,9 @@
+# For scripts/verify-deploy.sh only. A layer over compose.demo.yaml that puts a curl container where cloudflared would be,
+# so the deployment can be checked locally without Cloudflare: no token, no connection out, no cloudflared image pulled.
+# It keeps the tunnel's place on `edge` and its fixed address, which is what the agent trusts as its proxy.
+services:
+  tunnel:
+    image: curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+    entrypoint: ["sleep", "infinity"]
+    command: !reset null
+    secrets: !reset []
