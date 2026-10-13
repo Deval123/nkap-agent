@@ -1,0 +1,33 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn -B --no-transfer-progress clean verify
+
+  # Needs the pull request's full history to see its own commits. The range is taken
+  # against the base ref rather than the base sha, so commits already merged into the base
+  # are not counted as part of the pull request.
+  dco:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: git fetch origin "${{ github.event.pull_request.base.ref }}"
+      - run: ./.github/scripts/check-dco.test.sh
+      - run: ./.github/scripts/check-dco.sh "origin/${{ github.event.pull_request.base.ref }}..${{ github.event.pull_request.head.sha }}"
