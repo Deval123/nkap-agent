@@ -27,7 +27,9 @@ Do this before anything else is installed.
   drop that in `ip6tables` the same way. `internal` already gives the database, the simulator and the gateway no way out; this rule is for
   the containers that do have one (the agent and the tunnel).
 - Install Docker Engine and the Compose plugin from your distribution or from Docker's own instructions, and a JDK 21, Maven and `jq`
-  (the seed needs them on the host; you can remove them afterwards).
+  (the seed needs them on the host; you can remove them afterwards). The minimum for the host tools: **`jq` 1.6 or later** (Debian 12
+  ships 1.6), **GNU or BSD `stat`**, bash 4 or later, and the GNU or BSD form of `sed`, `awk`, `grep` and `mktemp`.
+  `scripts/check-portability.sh` checks the scripts for the two things that broke on Debian 12 and needs only `jq`.
 
 ## 2. Get the code
 
@@ -84,6 +86,18 @@ chown 10001:10001 /etc/nkap-agent/secrets/{agent-key,approver-key,visitor-salt}
 chmod 0400 /etc/nkap-agent/secrets/{agent-key,approver-key,visitor-salt}
 rm seed-keys.env
 ```
+
+**If the seed stops half way** (a failing step, a lost connection), it has left the stack up and the two keys it minted in the database.
+A second `scripts/seed.sh` then refuses, before it mints anything or touches `seed-keys.env`, with `the database is not fresh ... docker
+compose -p nkap-agent-demo down -v, then scripts/seed.sh again`. The recovery is exactly that, from the repository root: throw the
+half-built ledger away and seed again.
+
+```bash
+docker compose -p nkap-agent-demo down -v
+SEED_PROJECT=nkap-agent-demo SEED_OUT=/srv/nkap-agent SEED_COMPOSE_EXTRA=deploy/compose.demo.yaml scripts/seed.sh
+```
+
+The keys of the stopped run are gone with the database; `seed-keys.env` of the new run is the one to use.
 
 Stop the seed's helper container and take the snapshot that the reset restores. Do it now, before any visitor:
 

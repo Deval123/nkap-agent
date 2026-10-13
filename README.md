@@ -402,6 +402,8 @@ to `internal`, or giving one `NET_RAW`. `scripts/verify-deploy.sh` checks the li
 
 Requires Java 21 and Maven.
 
+The seed and the `scripts/verify-*.sh` also need Docker with Compose and these host tools: **`jq` 1.6 or later; GNU or BSD `stat`** (the scripts are written for macOS and Debian 12).
+
 ```bash
 mvn -B clean verify
 ```
