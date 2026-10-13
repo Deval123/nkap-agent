@@ -1,0 +1,269 @@
+{
+  "format": "nkap-agent-trace/1",
+  "recording": true,
+  "provenance": {
+    "date": "2026-10-13",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "case": "unrecorded-fee",
+    "title": "A fee the ledger never recorded",
+    "run": 1,
+    "runs": 3,
+    "modelCalls": 4,
+    "promptTokens": 7194,
+    "completionTokens": 3127,
+    "costUsd": 0.004973,
+    "prices": {
+      "inputPerMillionUsd": 0.3,
+      "outputPerMillionUsd": 0.9
+    },
+    "elapsedMillis": 16364,
+    "expected": {
+      "outcome": "PROPOSE",
+      "hypothesis": "unrecorded_fee",
+      "postings": [
+        {
+          "account": "fees:mtn-cm:XAF",
+          "amountMinor": 75,
+          "currency": "XAF"
+        },
+        {
+          "account": "provider:mtn-cm:float:XAF",
+          "amountMinor": -75,
+          "currency": "XAF"
+        }
+      ]
+    },
+    "matched": true,
+    "judgement": "hypothesis right, entry right"
+  },
+  "steps": [
+    {
+      "type": "task",
+      "text": "Investigate payment f0ee35cb-5e7c-4303-a4f3-0e4d2e331cae. The statement import a25d3115-53a4-4d1a-b8ad-e33ba4600b68 was loaded today."
+    },
+    {
+      "type": "model",
+      "callIndex": 1,
+      "millis": 1368,
+      "promptTokens": 1242,
+      "completionTokens": 167,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_payment",
+        "argument": "f0ee35cb-5e7c-4303-a4f3-0e4d2e331cae",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c1",
+      "tool": "get_payment",
+      "arguments": {
+        "reference": "f0ee35cb-5e7c-4303-a4f3-0e4d2e331cae"
+      },
+      "status": 200,
+      "fields": {
+        "reference": "f0ee35cb-5e7c-4303-a4f3-0e4d2e331cae",
+        "provider": "mtn-cm",
+        "merchantId": "acme",
+        "state": "UNKNOWN",
+        "operation": "COLLECT",
+        "amountMinorUnits": 5000,
+        "currency": "XAF",
+        "counterpartyMsisdn": "4477******01",
+        "providerReference": "",
+        "providerTransactionId": "",
+        "createdAt": "2026-10-13T17:49:34.017782Z",
+        "updatedAt": "2026-10-13T17:49:36.022788Z",
+        "detail": "The operator did not answer. The outcome is not yet known — poll GET /payments/f0ee35cb-5e7c-4303-a4f3-0e4d2e331cae until it resolves.",
+        "refundOf": "",
+        "escalatedAt": "2026-10-13T17:49:41.331402Z",
+        "unresolvedSince": "2026-10-13T17:49:36.022788Z",
+        "history": [
+          {
+            "from": "CREATED",
+            "to": "UNKNOWN",
+            "at": "2026-10-13T17:49:36.022788Z",
+            "cause": "SUBMIT_RESPONSE",
+            "operatorCode": "",
+            "note": "MTN did not answer within PT2S"
+          }
+        ]
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 2,
+      "millis": 1829,
+      "promptTokens": 1712,
+      "completionTokens": 291,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_statement_findings",
+        "argument": "a25d3115-53a4-4d1a-b8ad-e33ba4600b68",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c2",
+      "tool": "get_statement_findings",
+      "arguments": {
+        "importId": "a25d3115-53a4-4d1a-b8ad-e33ba4600b68"
+      },
+      "status": 200,
+      "fields": {
+        "importId": "a25d3115-53a4-4d1a-b8ad-e33ba4600b68",
+        "provider": {
+          "value": "mtn-cm"
+        },
+        "sourceName": "unrecorded-fee.csv",
+        "importedAt": "2026-10-13T17:49:50.558517Z",
+        "lineCount": 1,
+        "findings": [
+          {
+            "kind": "SUSPENSE_POSTED",
+            "operatorTransactionId": "FT-UF-0001",
+            "paymentReference": null,
+            "detail": "no payment holds FT-UF-0001; posted 5000 XAF: DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF"
+          }
+        ]
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 3,
+      "millis": 2885,
+      "promptTokens": 2002,
+      "completionTokens": 579,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_statement_lines",
+        "argument": "a25d3115-53a4-4d1a-b8ad-e33ba4600b68",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c3",
+      "tool": "get_statement_lines",
+      "arguments": {
+        "importId": "a25d3115-53a4-4d1a-b8ad-e33ba4600b68"
+      },
+      "status": 200,
+      "fields": {
+        "importId": "a25d3115-53a4-4d1a-b8ad-e33ba4600b68",
+        "lines": [
+          {
+            "operatorTransactionId": "FT-UF-0001",
+            "amountMinor": 5000,
+            "feeMinor": 75,
+            "currency": "XAF",
+            "occurredAt": "2026-10-13T10:00:00Z",
+            "status": "SETTLED"
+          }
+        ],
+        "lineCount": 1,
+        "truncated": false
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 4,
+      "millis": 10228,
+      "promptTokens": 2238,
+      "completionTokens": 2090,
+      "answer": {
+        "action": "final",
+        "tool": null,
+        "argument": null,
+        "outcome": "propose",
+        "hypothesis": "unrecorded_fee",
+        "postings": [
+          {
+            "account": "fees:mtn-cm:XAF",
+            "amountMinor": 75,
+            "currency": "XAF"
+          },
+          {
+            "account": "provider:mtn-cm:float:XAF",
+            "amountMinor": -75,
+            "currency": "XAF"
+          }
+        ],
+        "evidence": [
+          {
+            "callId": "c3",
+            "path": "/lines/0/feeMinor"
+          },
+          {
+            "callId": "c1",
+            "path": "/amountMinorUnits"
+          },
+          {
+            "callId": "c1",
+            "path": "/provider"
+          },
+          {
+            "callId": "c1",
+            "path": "/currency"
+          }
+        ],
+        "explanation": "The statement line shows a fee of 75 XAF that is not recorded in the payment; the payment amount is 5000 XAF with no fee component, indicating the fee is missing from the ledger."
+      }
+    },
+    {
+      "type": "outcome",
+      "kind": "PROPOSED",
+      "paymentReference": "f0ee35cb-5e7c-4303-a4f3-0e4d2e331cae",
+      "hypothesis": "unrecorded_fee",
+      "postings": [
+        {
+          "account": "fees:mtn-cm:XAF",
+          "amountMinor": 75,
+          "currency": "XAF"
+        },
+        {
+          "account": "provider:mtn-cm:float:XAF",
+          "amountMinor": -75,
+          "currency": "XAF"
+        }
+      ],
+      "evidence": [
+        {
+          "callId": "c3",
+          "path": "/lines/0/feeMinor",
+          "value": "75"
+        },
+        {
+          "callId": "c1",
+          "path": "/amountMinorUnits",
+          "value": "5000"
+        },
+        {
+          "callId": "c1",
+          "path": "/provider",
+          "value": "mtn-cm"
+        },
+        {
+          "callId": "c1",
+          "path": "/currency",
+          "value": "XAF"
+        }
+      ],
+      "explanation": "The statement line shows a fee of 75 XAF that is not recorded in the payment; the payment amount is 5000 XAF with no fee component, indicating the fee is missing from the ledger."
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+{
+  "format": "nkap-agent-trace/1",
+  "recording": true,
+  "provenance": {
+    "date": "2026-10-13",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "case": "money-without-owner",
+    "title": "Money on the statement that belongs to nobody yet",
+    "run": 1,
+    "runs": 3,
+    "modelCalls": 4,
+    "promptTokens": 7080,
+    "completionTokens": 1103,
+    "costUsd": 0.003117,
+    "prices": {
+      "inputPerMillionUsd": 0.3,
+      "outputPerMillionUsd": 0.9
+    },
+    "elapsedMillis": 6680,
+    "expected": {
+      "outcome": "NO_PROPOSAL"
+    },
+    "matched": true,
+    "judgement": "no_proposal, as expected"
+  },
+  "steps": [
+    {
+      "type": "task",
+      "text": "Investigate payment e8ab10ce-e62f-45c2-b9dd-df395d2083ce. The statement import 0fbfc3fb-a9ee-41c4-bfaa-aa73f549037b was loaded today."
+    },
+    {
+      "type": "model",
+      "callIndex": 1,
+      "millis": 1146,
+      "promptTokens": 1237,
+      "completionTokens": 206,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_payment",
+        "argument": "e8ab10ce-e62f-45c2-b9dd-df395d2083ce",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c1",
+      "tool": "get_payment",
+      "arguments": {
+        "reference": "e8ab10ce-e62f-45c2-b9dd-df395d2083ce"
+      },
+      "status": 200,
+      "fields": {
+        "reference": "e8ab10ce-e62f-45c2-b9dd-df395d2083ce",
+        "provider": "mtn-cm",
+        "merchantId": "acme",
+        "state": "SUCCEEDED",
+        "operation": "COLLECT",
+        "amountMinorUnits": 2500,
+        "currency": "XAF",
+        "counterpartyMsisdn": "4477******03",
+        "providerReference": "",
+        "providerTransactionId": "",
+        "createdAt": "2026-10-13T17:49:31.819237Z",
+        "updatedAt": "2026-10-13T17:49:32.179244Z",
+        "detail": "",
+        "refundOf": "",
+        "escalatedAt": "",
+        "unresolvedSince": "2026-10-13T17:49:31.823886Z",
+        "history": [
+          {
+            "from": "CREATED",
+            "to": "SUBMITTED",
+            "at": "2026-10-13T17:49:31.823886Z",
+            "cause": "SUBMIT_RESPONSE",
+            "operatorCode": "",
+            "note": ""
+          },
+          {
+            "from": "SUBMITTED",
+            "to": "SUCCEEDED",
+            "at": "2026-10-13T17:49:32.179244Z",
+            "cause": "RECONCILER",
+            "operatorCode": "SUCCESSFUL",
+            "note": ""
+          }
+        ]
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 2,
+      "millis": 1301,
+      "promptTokens": 1681,
+      "completionTokens": 180,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_statement_findings",
+        "argument": "0fbfc3fb-a9ee-41c4-bfaa-aa73f549037b",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c2",
+      "tool": "get_statement_findings",
+      "arguments": {
+        "importId": "0fbfc3fb-a9ee-41c4-bfaa-aa73f549037b"
+      },
+      "status": 200,
+      "fields": {
+        "importId": "0fbfc3fb-a9ee-41c4-bfaa-aa73f549037b",
+        "provider": {
+          "value": "mtn-cm"
+        },
+        "sourceName": "money-without-owner.csv",
+        "importedAt": "2026-10-13T17:49:45.985314Z",
+        "lineCount": 1,
+        "findings": [
+          {
+            "kind": "SUSPENSE_POSTED",
+            "operatorTransactionId": "FT-MO-0001",
+            "paymentReference": null,
+            "detail": "no payment holds FT-MO-0001; posted 12000 XAF: DR provider:mtn-cm:float:XAF / CR suspense:mtn-cm:XAF"
+          }
+        ]
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 3,
+      "millis": 1556,
+      "promptTokens": 1966,
+      "completionTokens": 226,
+      "answer": {
+        "action": "call_tool",
+        "tool": "get_statement_lines",
+        "argument": "0fbfc3fb-a9ee-41c4-bfaa-aa73f549037b",
+        "outcome": null,
+        "hypothesis": null,
+        "postings": null,
+        "evidence": null,
+        "explanation": null
+      }
+    },
+    {
+      "type": "tool",
+      "callId": "c3",
+      "tool": "get_statement_lines",
+      "arguments": {
+        "importId": "0fbfc3fb-a9ee-41c4-bfaa-aa73f549037b"
+      },
+      "status": 200,
+      "fields": {
+        "importId": "0fbfc3fb-a9ee-41c4-bfaa-aa73f549037b",
+        "lines": [
+          {
+            "operatorTransactionId": "FT-MO-0001",
+            "amountMinor": 12000,
+            "feeMinor": 0,
+            "currency": "XAF",
+            "occurredAt": "2026-10-13T12:00:00Z",
+            "status": "SETTLED"
+          }
+        ],
+        "lineCount": 1,
+        "truncated": false
+      }
+    },
+    {
+      "type": "model",
+      "callIndex": 4,
+      "millis": 2655,
+      "promptTokens": 2196,
+      "completionTokens": 491,
+      "answer": {
+        "action": "final",
+        "tool": null,
+        "argument": null,
+        "outcome": "no_proposal",
+        "hypothesis": null,
+        "postings": [ ],
+        "evidence": [ ],
+        "explanation": "The statement line shows a movement of 12000 XAF with zero fee that was posted to suspense because no payment matches it. This does not correspond to an unrecorded fee (fee is zero) nor a duplicate posting (only one line). Therefore none of the hypothesised adjustments (unrecorded_fee, duplicate_posting) apply."
+      }
+    },
+    {
+      "type": "outcome",
+      "kind": "NO_PROPOSAL",
+      "explanation": "The statement line shows a movement of 12000 XAF with zero fee that was posted to suspense because no payment matches it. This does not correspond to an unrecorded fee (fee is zero) nor a duplicate posting (only one line). Therefore none of the hypothesised adjustments (unrecorded_fee, duplicate_posting) apply.",
+      "droppedCitations": 0
+    }
+  ]
+}
