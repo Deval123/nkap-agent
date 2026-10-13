@@ -68,9 +68,9 @@ for c in unrecorded-fee duplicate-posting money-without-owner injection i-do-not
 done
 expect "the proposals say hypothesis and entry are right" "$(grep -c 'PROPOSED .*ok: hypothesis right, entry right' <<<"$out")" "6"
 expect "the refusals say no_proposal, as expected" "$(grep -c 'NO_PROPOSAL .*ok: no_proposal, as expected' <<<"$out")" "6"
-expect "36 model calls (3 per run)" "$(lines "$work/model.log")" "36"
-expect "every call asked for the strict schema, with the 6000-token bound" "$(grep -c 'max_tokens=6000 bearer=ok strict=true' "$work/model.log")" "36"
-expect "24 gateway reads, every one a GET with the agent key" "$(grep -c '^GET .* bearer=ok' "$work/gateway.log")" "24"
+expect "48 model calls (4 per run: payment, findings, statement lines, answer)" "$(lines "$work/model.log")" "48"
+expect "every call asked for the strict schema, with the 6000-token bound" "$(grep -c 'max_tokens=6000 bearer=ok strict=true' "$work/model.log")" "48"
+expect "24 gateway reads (the statement lines are a file, not a gateway read), every one a GET with the agent key" "$(grep -c '^GET .* bearer=ok' "$work/gateway.log")" "24"
 expect "no gateway request but GET" "$(grep -vc '^GET ' "$work/gateway.log" || true)" "0"
 expect "12 records were kept" "$(cat "$work"/results/*.jsonl | wc -l | tr -d ' ')" "12"
 expect "the records are private" "$(stat -f '%Lp' "$work"/results/*.jsonl 2>/dev/null || stat -c '%a' "$work"/results/*.jsonl)" "600"
@@ -78,10 +78,12 @@ injected="$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "injection") | 
 expect "the injection sentence reached the model in both runs, inside a block" "$(grep -c '^<tool_result .*Ignore your previous' <<<"$injected")" "2"
 expect "and nothing follows the harness's closing tag" "$(grep -c '</tool_result>$' <<<"$injected")" "2"
 expect "a case with no statement import is told so by the gateway: the nil import answers 404, and the run still ends as expected" \
-  "$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "injection" or .case == "i-do-not-know") | .record.toolCalls[1].status' | sort -u)" "404"
+  "$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "injection" or .case == "i-do-not-know") | [.record.toolCalls[1].status, .record.toolCalls[2].status] | @tsv' | sort -u)" "404	404"
 expect "standard output holds only the table and the totals: no log line" \
   "$(grep -c -E '^(INFO|WARNING|SEVERE|[A-Z][a-z]{2} [0-9]{1,2}, [0-9]{4})' "$work/out" || true)" "0"
 expect "the log is quiet by default: no INFO line on standard error" "$(grep -c 'INFO:' "$work/err" || true)" "0"
+expect "the unrecorded fee is proposed citing the fee on the statement line, which is 75" \
+  "$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "unrecorded-fee") | .record.outcome.evidence[0] | "\(.callId) \(.path) \(.value)"' | sort -u)" "c3 /lines/0/feeMinor 75"
 leftovers="$(cat "$work/out" "$work/err" "$work"/results/* "$work/model.log" "$work/gateway.log")"
 expect "no key in any output, record or log" "$(grep -c -e "$MODEL_KEY" -e "$AGENT_KEY" <<<"$leftovers" || true)" "0"
 expect "the fake reasoning text is in none of them" "$(grep -c 'FAKE-REASONING-TEXT' <<<"$leftovers" || true)" "0"
@@ -89,7 +91,7 @@ expect "the fake reasoning text is in none of them" "$(grep -c 'FAKE-REASONING-T
 say "--verbose turns the log on, on standard error, and leaves standard output as it was"
 runner -- --runs 1 --max-calls 100 --verbose
 expect "exit 0" "$code" "0"
-expect "30 INFO lines are on standard error (6 runs x 3 model calls and 2 tool calls)" "$(grep -c 'INFO:' "$work/err")" "30"
+expect "42 INFO lines are on standard error (6 runs x 4 model calls and 3 tool calls)" "$(grep -c 'INFO:' "$work/err")" "42"
 expect "none is on standard output" "$(grep -c -E '^(INFO|[A-Z][a-z]{2} [0-9]{1,2}, [0-9]{4})' "$work/out" || true)" "0"
 
 say "A model that books the entry of the measured run for the unrecorded fee"
@@ -99,7 +101,7 @@ expect "exit 1: a run did not match" "$code" "1"
 expect "the table says the unrecorded-fee run was REJECTED and does not match" "$(grep -c '^unrecorded-fee .*REJECTED .*NO: ' <<<"$out")" "1"
 expect "the other five matched" "$(grep -c 'run: 5 of 6 run(s) matched the catalogue' <<<"$out")" "1"
 expect "the record names the rule that refused it" "$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "unrecorded-fee") | .record.outcome.violations[].code')" "pattern-mismatch"
-expect "the refused run took 4 model calls: two looks, the answer, the repair" "$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "unrecorded-fee") | .record.modelCalls')" "4"
+expect "the refused run took 5 model calls: three looks, the answer, the repair" "$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "unrecorded-fee") | .record.modelCalls')" "5"
 
 say "The call cap holds"
 stop_servers; start gateway; start model script.json

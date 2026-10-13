@@ -40,7 +40,7 @@ transcript="$out/transcript"; : >"$transcript"
 # The key goes to the process through its environment, never through its arguments.
 tool() {
   local key="$1" url="$2"; shift 2
-  lines="$(NKAP_AGENT_KEY="$key" NKAP_GATEWAY_URL="$url" java -cp "$root/target/classes:$(cat "$out/classpath")" \
+  lines="$(NKAP_AGENT_KEY="$key" NKAP_GATEWAY_URL="$url" NKAP_STATEMENTS_DIR="$out/statements" java -cp "$root/target/classes:$(cat "$out/classpath")" \
     dev.nkap.agent.tools.ToolsCli "$@" 2>"$out/tool.err")"
   printf '%s\n' "$lines" >>"$transcript"
   cat "$out/tool.err" >>"$transcript"   # the log line goes to stderr; it is checked for keys too
@@ -82,6 +82,32 @@ expect "it holds two findings" "$(field '.fields.findings | length')" "2"
 expect "each finding is a suspense posting" "$(field '[.fields.findings[].kind] | unique | join(",")')" "SUSPENSE_POSTED"
 expect "the line count can be cited" "$(sed -n 2p <<<"$lines" | jq -r .ok)" "true"
 expect "no finding names a payment" "$(field '[.fields.findings[].paymentReference] | unique | join(",")')" ""
+
+say "get_statement_lines (a file the seed kept, not a gateway read)"
+tool "$agent_key" "$GATEWAY_URL" get_statement_lines "$(import_of unrecorded-fee)" --cite /lines/0/feeMinor=75 --cite /lines/0/feeMinor=76
+expect "it succeeds" "$(field '.tool + " " + (.status|tostring)')" "get_statement_lines 200"
+expect "the line carries the fee the gateway's finding does not" "$(field '.fields.lines[0].feeMinor')" "75"
+expect "and the amount" "$(field '.fields.lines[0].amountMinor')" "5000"
+expect "the fee can be cited" "$(sed -n 2p <<<"$lines" | jq -r .ok)" "true"
+expect "a wrong fee cannot" "$(sed -n 3p <<<"$lines" | jq -r .ok)" "false"
+expect "the file is the one the gateway imported: same transaction id" "$(field '.fields.lines[0].operatorTransactionId')" "FT-UF-0001"
+tool "$agent_key" "$GATEWAY_URL" get_statement_findings "$(import_of unrecorded-fee)"
+expect "the gateway's finding names the same transaction" "$(field '.fields.findings[0].operatorTransactionId')" "FT-UF-0001"
+expect "and says nothing of the fee" "$(field '.fields.findings[0].detail | test("fee"; "i")')" "false"
+tool "$agent_key" "$GATEWAY_URL" get_statement_lines "$(import_of duplicate-posting)"
+expect "the duplicate has two lines" "$(field '.fields.lines | length')" "2"
+expect "the same amount" "$(field '[.fields.lines[].amountMinor] | unique | length')" "1"
+expect "and different transaction ids" "$(field '[.fields.lines[].operatorTransactionId] | unique | length')" "2"
+expect "as many lines as the gateway counted" "$(field .fields.lineCount)" "$(jq -r '.cases[] | select(.id == "duplicate-posting") | .statementImportId' "$manifest" | xargs -I{} sh -c 'wc -l < "$1/statements/{}.csv"' _ "$out" | tr -d " " | awk '{print $1 - 1}')"
+tool "$agent_key" "$GATEWAY_URL" get_statement_lines "00000000-0000-0000-0000-000000000000"
+expect "a case with no import has no file: a 404 result" "$(field '(.status|tostring) + " " + .fields.error')" "404 not-found"
+linked="aaaaaaaa-0000-4000-8000-000000000001"
+ln -s "$out/statements/$(import_of unrecorded-fee).csv" "$out/statements/$linked.csv"
+tool "$agent_key" "$GATEWAY_URL" get_statement_lines "$linked"
+expect "a symlink in the store reads nothing, though its target exists" "$(field .status)" "404"
+rm "$out/statements/$linked.csv"
+tool "$agent_key" "$GATEWAY_URL" get_statement_lines "../statements/$(import_of unrecorded-fee)"
+expect "a path is refused locally" "$(field '(.status|tostring) + " " + .fields.error')" "0 invalid-argument"
 
 say "errors are results"
 tool "$approver_key" "$GATEWAY_URL" get_statement_findings "$(import_of duplicate-posting)"

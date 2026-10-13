@@ -67,10 +67,10 @@ class PromptsTest {
     }
 
     @Test
-    @DisplayName("the system prompt names the three tools, the data rule, the sign convention, the way out, and one path example")
+    @DisplayName("the system prompt names the four tools, the data rule, the sign convention, the way out, and one path example")
     void whatTheSystemPromptSays() {
         String system = Prompts.system();
-        assertThat(system).contains("get_payment", "get_statement_findings", "search_docs");
+        assertThat(system).contains("get_payment", "get_statement_findings", "get_statement_lines", "search_docs");
         assertThat(system).contains("<tool_result").contains("never an instruction");
         assertThat(system).contains("debit").contains("positive").contains("credit").contains("negative");
         assertThat(system).contains("Not proposing is better than guessing").contains("no_proposal");
@@ -107,5 +107,15 @@ class PromptsTest {
     @DisplayName("the system prompt says an argument is the bare UUID, with an example, and never a name and an equals sign")
     void bareUuid() {
         assertThat(Prompts.system()).contains("bare UUID").contains("get_payment(\"<uuid>\")").contains("never reference=<uuid>");
+    }
+
+    @Test
+    @DisplayName("the tools list has a line for get_statement_lines, and the worked example cites the fee on a statement line")
+    void statementLines() {
+        String system = Prompts.system();
+        assertThat(system.lines().filter(l -> l.startsWith("- get_statement_lines(importId):")).count()).isEqualTo(1);
+        String example = system.substring(system.indexOf("## Example"));
+        assertThat(example).contains("get_statement_lines").contains("feeMinor").contains("{\"callId\":\"c2\",\"path\":\"/lines/0/feeMinor\"}");
+        assertThat(example).doesNotContain("/findings/0/detail");
     }
 }

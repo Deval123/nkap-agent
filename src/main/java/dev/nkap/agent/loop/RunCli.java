@@ -7,6 +7,7 @@ import dev.nkap.agent.model.NebiusModel;
 import dev.nkap.agent.scenario.Catalogue;
 import dev.nkap.agent.scenario.ScenarioCase;
 import dev.nkap.agent.tools.AgentTools;
+import dev.nkap.agent.tools.DirectoryStatementStore;
 import dev.nkap.agent.tools.DocsIndex;
 import dev.nkap.agent.tools.GatewayClient;
 import java.io.IOException;
@@ -68,7 +69,7 @@ public final class RunCli {
         if (args.length >= 1 && args[0].equals("run")) {
             return runCases(args, env, out, err);
         }
-        err.println("usage: RunCli run --manifest FILE [--runs K] [--max-calls N] [--results-dir DIR] [--model ID] [--max-tokens N] [--verbose]"
+        err.println("usage: RunCli run --manifest FILE [--runs K] [--max-calls N] [--results-dir DIR] [--statements-dir DIR] [--model ID] [--max-tokens N] [--verbose]"
                 + " | RunCli fake-data DIR");
         return 2;
     }
@@ -154,6 +155,7 @@ public final class RunCli {
             targets.add(new String[] {c.id(), ref, imp});
         }
 
+        Path statements = statementsDir(options, Path.of(options.get("manifest")));
         String gatewayUrl = env.getOrDefault("NKAP_GATEWAY_URL", "http://127.0.0.1:8080");
         String modelId = options.getOrDefault("model", "nvidia/nemotron-3-super-120b-a12b");
         Path resultsDir = Path.of(options.getOrDefault("results-dir", "run-results"));
@@ -196,7 +198,7 @@ public final class RunCli {
                 if (model.stopped()) {
                     break outer;
                 }
-                RunRecord record = loop.run(trace -> new AgentTools(gateway, DocsIndex.bundled(), trace), target[1], target[2]);
+                RunRecord record = loop.run(trace -> new AgentTools(gateway, DocsIndex.bundled(), new DirectoryStatementStore(statements), trace), target[1], target[2]);
                 Judgement judgement = Expectation.judge(scenario, record.outcome());
                 double cost = (record.promptTokens() * priceIn + record.completionTokens() * priceOut) / 1e6;
                 out.println(String.format("%-20s %3d  %-12s %-34s %5d %8d %10d %8d %9.4f", target[0], k, record.outcome().kind(),
@@ -243,6 +245,15 @@ public final class RunCli {
         for (java.util.logging.Handler handler : root.getHandlers()) {
             handler.setLevel(level);
         }
+    }
+
+    /** {@code --statements-dir}, or the {@code statements} directory beside the manifest, where the seed keeps them. */
+    static Path statementsDir(Map<String, String> options, Path manifest) {
+        if (options.containsKey("statements-dir")) {
+            return Path.of(options.get("statements-dir"));
+        }
+        Path parent = manifest.toAbsolutePath().getParent();
+        return (parent == null ? Path.of(".") : parent).resolve("statements");
     }
 
     private static Integer boundedInt(String text, int min, int max) {

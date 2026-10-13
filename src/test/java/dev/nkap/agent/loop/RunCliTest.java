@@ -154,4 +154,34 @@ class RunCliTest {
         assertThat(code).isEqualTo(2);
         assertThat(err).contains("NEBIUS_API_KEY is not set");
     }
+
+    @Test
+    @DisplayName("the statements directory is --statements-dir, or else statements/ beside the manifest, where the seed puts it")
+    void statementsDirectory() {
+        assertThat(RunCli.statementsDir(Map.of(), Path.of("/out/seed-manifest.json"))).isEqualTo(Path.of("/out/statements"));
+        assertThat(RunCli.statementsDir(Map.of("statements-dir", "/elsewhere"), Path.of("/out/seed-manifest.json")))
+                .isEqualTo(Path.of("/elsewhere"));
+    }
+
+    @Test
+    @DisplayName("fake-data writes, for each case that has lines, the statement file under its import id, and none for a case without")
+    void fakeStatements() throws Exception {
+        run(env(), "fake-data", dir.toString());
+        JsonNode manifest = JSON.readTree(dir.resolve("manifest.json").toFile());
+        for (ScenarioCase c : Catalogue.all()) {
+            for (JsonNode n : manifest.get("cases")) {
+                if (n.get("id").asText().equals(c.id()) && !c.lines().isEmpty()) {
+                    Path file = dir.resolve("statements/" + n.get("statementImportId").asText() + ".csv");
+                    assertThat(Files.readString(file)).startsWith("operator_transaction_id,amount_minor,fee_minor,");
+                }
+            }
+        }
+        try (var files = Files.list(dir.resolve("statements"))) {
+            assertThat(files.count()).isEqualTo(Catalogue.all().stream().filter(c -> !c.lines().isEmpty()).count());
+        }
+        JsonNode finding = JSON.readTree(Files.readString(dir.resolve("gateway/statements/imports/"
+                + manifest.get("cases").get(0).get("statementImportId").asText()))).get("findings").get(0);
+        assertThat(finding.get("detail").asText()).as("the gateway's finding does not carry the fee, as the real one does not")
+                .doesNotContain("fee");
+    }
 }

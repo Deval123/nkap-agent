@@ -41,6 +41,7 @@ public final class ToolsCli {
         ToolResult result = switch (args[0]) {
             case "get_payment" -> tools.getPayment(args[1]);
             case "get_statement_findings" -> tools.getStatementFindings(args[1]);
+            case "get_statement_lines" -> tools.getStatementLines(args[1]);
             default -> tools.searchDocs(args[1]);
         };
         out.println(result.toJson());
@@ -58,8 +59,11 @@ public final class ToolsCli {
 
     public static void main(String[] args) {
         String url = System.getenv().getOrDefault("NKAP_GATEWAY_URL", "http://127.0.0.1:8080");
+        String statements = System.getenv("NKAP_STATEMENTS_DIR");
+        StatementStore store = statements == null || statements.isBlank() ? id -> java.util.Optional.empty()
+                : new DirectoryStatementStore(java.nio.file.Path.of(statements));
         AgentTools tools = new AgentTools(new GatewayClient(url, GatewayClient.agentKeyFromEnvironment()),
-                DocsIndex.bundled(), new Trace());
+                DocsIndex.bundled(), store, new Trace());
         System.exit(run(args, tools, System.out));
     }
 }
