@@ -100,7 +100,7 @@ public record RunRecord(String reference, String importId, List<Message> message
                         .put("value", e.value()));
                 node.put("explanation", proposal.explanation());
             }
-            case RunOutcome.NoProposal n -> node.put("explanation", n.explanation());
+            case RunOutcome.NoProposal n -> node.put("explanation", n.explanation()).put("droppedCitations", n.droppedCitations());
             case RunOutcome.Rejected r -> {
                 ArrayNode violations = node.putArray("violations");
                 r.violations().forEach(v -> violations.addObject().put("code", v.code()).put("text", v.text()));

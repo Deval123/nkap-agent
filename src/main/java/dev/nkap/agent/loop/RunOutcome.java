@@ -14,8 +14,15 @@ public sealed interface RunOutcome {
         }
     }
 
-    /** The model declined to propose, and the answer passed the checks that apply to a refusal. */
-    record NoProposal(String explanation) implements RunOutcome {
+    /**
+     * The model declined to propose, and the answer passed the checks that apply to a refusal. A citation of a
+     * refusal that does not resolve is dropped and counted, never a violation.
+     */
+    record NoProposal(String explanation, int droppedCitations) implements RunOutcome {
+        public NoProposal(String explanation) {
+            this(explanation, 0);
+        }
+
         public String kind() {
             return "NO_PROPOSAL";
         }

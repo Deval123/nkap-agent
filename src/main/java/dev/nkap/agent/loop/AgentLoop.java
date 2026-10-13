@@ -98,7 +98,7 @@ public final class AgentLoop {
                 break;
             }
             if (verdict instanceof ProposalValidator.Verdict.NoProposal none) {
-                outcome = new RunOutcome.NoProposal(none.explanation());
+                outcome = new RunOutcome.NoProposal(none.explanation(), none.droppedCitations());
                 break;
             }
             List<Violation> violations = ((ProposalValidator.Verdict.Rejected) verdict).violations();

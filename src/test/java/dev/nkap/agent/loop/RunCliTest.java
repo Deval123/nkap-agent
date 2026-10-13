@@ -110,4 +110,48 @@ class RunCliTest {
         assertThat(code).isEqualTo(2);
         assertThat(out + err).doesNotContain(KEY);
     }
+
+    @Test
+    @DisplayName("the log is off below WARNING by default and on at INFO with --verbose, for the loggers of the tools and of the model")
+    void loggingLevel() {
+        java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
+        java.util.logging.Level before = root.getLevel();
+        java.util.List<java.util.logging.Level> handlerLevels = java.util.Arrays.stream(root.getHandlers()).map(java.util.logging.Handler::getLevel).toList();
+        // Other tests give these loggers a level of their own; in the runner they have none and inherit the root's.
+        java.util.Map<String, java.util.logging.Level> own = new java.util.HashMap<>();
+        for (String name : java.util.List.of("dev.nkap.agent.tools", "dev.nkap.agent.model")) {
+            own.put(name, java.util.logging.Logger.getLogger(name).getLevel());
+            java.util.logging.Logger.getLogger(name).setLevel(null);
+        }
+        try {
+            RunCli.configureLogging(false);
+            for (String name : java.util.List.of("dev.nkap.agent.tools", "dev.nkap.agent.model")) {
+                assertThat(java.util.logging.Logger.getLogger(name).isLoggable(java.util.logging.Level.INFO)).as(name).isFalse();
+                assertThat(java.util.logging.Logger.getLogger(name).isLoggable(java.util.logging.Level.WARNING)).as(name).isTrue();
+            }
+            RunCli.configureLogging(true);
+            assertThat(java.util.logging.Logger.getLogger("dev.nkap.agent.model").isLoggable(java.util.logging.Level.INFO)).isTrue();
+            for (java.util.logging.Handler h : root.getHandlers()) {
+                assertThat(h.getLevel().intValue()).isLessThanOrEqualTo(java.util.logging.Level.INFO.intValue());
+            }
+        } finally {
+            own.forEach((name, level) -> java.util.logging.Logger.getLogger(name).setLevel(level));
+            root.setLevel(before);
+            java.util.Iterator<java.util.logging.Level> it = handlerLevels.iterator();
+            for (java.util.logging.Handler h : root.getHandlers()) {
+                h.setLevel(it.next());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("--verbose is a flag, not an option that takes a value, and it does not make a run start")
+    void verboseFlagIsAccepted() throws Exception {
+        run(env(), "fake-data", dir.toString());
+        Map<String, String> noKey = env();
+        noKey.remove("NEBIUS_API_KEY");
+        run(noKey, "run", "--manifest", dir.resolve("manifest.json").toString(), "--verbose");
+        assertThat(code).isEqualTo(2);
+        assertThat(err).contains("NEBIUS_API_KEY is not set");
+    }
 }

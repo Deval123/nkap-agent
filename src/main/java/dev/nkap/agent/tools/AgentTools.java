@@ -75,7 +75,7 @@ public final class AgentTools {
         Map<String, String> arguments = new LinkedHashMap<>();
         arguments.put(argumentName, argument == null ? "" : argument);
         if (argument == null || !UUID.matcher(argument).matches()) {
-            return done(trace.record(tool, arguments, 0, error("invalid-argument", argumentName + " must be a UUID")));
+            return done(trace.record(tool, arguments, 0, error("invalid-argument", "The argument must be the bare UUID, with no name and no quotes.")));
         }
         try {
             GatewayClient.Response response = gateway.get(route + argument);

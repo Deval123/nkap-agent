@@ -71,9 +71,22 @@ class ToolBlockTest {
         assertThat(trace.resolve("c2", "/state")).isEmpty();
         assertThat(trace.resolve("c1", "/nope")).isEmpty();
         assertThat(trace.resolve("c1", "/nested")).as("an object is not a value").isEmpty();
+        assertThat(trace.resolve("c1", "/missing")).as("a JSON null that is present is the value \"null\"").contains("null");
         assertThat(trace.resolve("c1", "fields.state")).as("dotted paths are not JSON Pointers").isEmpty();
         assertThat(trace.resolve("c1", "state")).isEmpty();
         assertThat(trace.resolve(null, "/state")).isEmpty();
         assertThat(trace.resolve("c1", null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a null and an empty string that are present in the result are values; a missing key, an object and an array are not")
+    void nullAndEmptyAreValues() {
+        result("{\"paymentReference\":null,\"providerTransactionId\":\"\",\"list\":[1],\"obj\":{}}");
+        assertThat(trace.resolve("c1", "/paymentReference")).contains("null");
+        assertThat(trace.resolve("c1", "/providerTransactionId")).contains("");
+        assertThat(trace.resolve("c1", "/absent")).isEmpty();
+        assertThat(trace.resolve("c1", "/list")).isEmpty();
+        assertThat(trace.resolve("c1", "/obj")).isEmpty();
+        assertThat(trace.resolve("c1", "/list/0")).contains("1");
     }
 }

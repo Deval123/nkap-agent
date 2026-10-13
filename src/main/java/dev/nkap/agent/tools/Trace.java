@@ -41,7 +41,9 @@ public final class Trace {
 
     /**
      * The value a pointer addresses in a recorded result, as text, or empty if the call, the path or the value
-     * does not exist. The path is a JSON Pointer into the fields of the result, which are what the model sees.
+     * does not exist. The path is a JSON Pointer into the fields of the result, which are what the model sees. A
+     * null that is present is the value {@code "null"} and an empty string is {@code ""}: absence can be evidence.
+     * A missing key, an object and an array are not values.
      */
     public synchronized Optional<String> resolve(String callId, String path) {
         if (callId == null || path == null) {
@@ -57,7 +59,7 @@ public final class Trace {
         } catch (IllegalArgumentException notAPointer) {
             return Optional.empty();
         }
-        return node.isValueNode() && !node.isNull() ? Optional.of(node.asText()) : Optional.empty();
+        return node.isValueNode() ? Optional.of(node.asText()) : Optional.empty();
     }
 
     public synchronized Verification verify(EvidenceRef ref) {
