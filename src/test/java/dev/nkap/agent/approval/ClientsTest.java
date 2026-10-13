@@ -334,7 +334,7 @@ class ClientsTest {
     }
 
     @Test
-    @DisplayName("of everything compiled in this repository, only the approval command calls the approver: no other class refers to it")
+    @DisplayName("of everything compiled in this repository, only the approval command and the service's run service (its decision route) call the approver: no other class refers to it")
     void onlyTheCommandApproves() throws Exception {
         java.nio.file.Path classes = java.nio.file.Path.of(AdjustmentApprover.class.getProtectionDomain().getCodeSource().getLocation().toURI());
         List<String> referring = new java.util.ArrayList<>();
@@ -347,7 +347,7 @@ class ClientsTest {
             }
         }
         assertThat(referring).allMatch(name -> name.startsWith("dev/nkap/agent/approval/AdjustmentApprover")
-                || name.startsWith("dev/nkap/agent/approval/ApprovalCli"), referring.toString());
+                || name.startsWith("dev/nkap/agent/approval/ApprovalCli") || name.equals("dev/nkap/agent/web/RunService.class"), referring.toString());
         assertThat(referring).anyMatch(name -> name.startsWith("dev/nkap/agent/approval/ApprovalCli"));
     }
 }
