@@ -245,4 +245,19 @@ class LiveBudgetTest {
         assertThat(refused(budget.tryAcquire("")).reason()).isEqualTo("unavailable");
         assertThat(refused(budget.tryAcquire(null)).reason()).isEqualTo("unavailable");
     }
+
+    @Test
+    @DisplayName("what is left today can be read without using any of it, and is empty when the file cannot be trusted")
+    void remainingToday() throws IOException {
+        LiveBudget budget = budget(3, Duration.ZERO);
+        assertThat(budget.remainingToday()).contains(3);
+        budget.tryAcquire("a");
+        assertThat(budget.remainingToday()).contains(2);
+        assertThat(budget.remainingToday()).as("reading costs nothing").contains(2);
+        clock.advance(Duration.ofHours(15));
+        assertThat(budget.remainingToday()).as("a new day").contains(3);
+        Files.writeString(dir.resolve("state/budget.json"), "garbage");
+        assertThat(budget.remainingToday()).isEmpty();
+        assertThat(Files.readString(dir.resolve("state/budget.json"))).isEqualTo("garbage");
+    }
 }
