@@ -42,8 +42,28 @@ final class NkapHttp {
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
+    /**
+     * The one name the operator may give for plain http: a single lower-case label that starts with a letter, so no dot, no
+     * upper-case letter and no IP address, and no list or pattern. It is compared to the address as text, whole.
+     */
+    static final String HOST = "[a-z]([a-z0-9-]{0,61}[a-z0-9])?";
+
     NkapHttp(String baseUrl, Supplier<String> key, BiPredicate<String, String> allowed, Duration timeout) {
-        if (baseUrl == null || !(baseUrl.startsWith("https://") || baseUrl.matches("http://(127\\.0\\.0\\.1|localhost)(:\\d+)?/?"))) {
+        this(baseUrl, key, allowed, timeout, null);
+    }
+
+    /**
+     * {@code plainHttpHost}, if given, is the one hostname for which plain http is accepted, for a gateway on a private
+     * network that nothing else can reach; any other host still needs https or a loopback address.
+     */
+    NkapHttp(String baseUrl, Supplier<String> key, BiPredicate<String, String> allowed, Duration timeout, String plainHttpHost) {
+        if (plainHttpHost != null && !plainHttpHost.matches(HOST)) {
+            throw new IllegalArgumentException("the plain-http host is one plain lower-case name");
+        }
+        boolean safe = baseUrl != null && (baseUrl.matches("https://[A-Za-z0-9.-]+(:\\d{1,5})?(/.*)?")
+                || baseUrl.matches("http://(127\\.0\\.0\\.1|localhost)(:\\d{1,5})?/?")
+                || (plainHttpHost != null && baseUrl.matches("http://" + java.util.regex.Pattern.quote(plainHttpHost) + "(:\\d{1,5})?/?")));
+        if (!safe) {
             throw new IllegalArgumentException("the base URL is https, or a loopback address: the key is not sent in clear");
         }
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;

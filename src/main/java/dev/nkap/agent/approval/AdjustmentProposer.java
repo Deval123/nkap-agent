@@ -23,6 +23,9 @@ import java.util.regex.Pattern;
  */
 public final class AdjustmentProposer {
 
+    /** What a host name for plain http may look like: lower-case labels, no dot at the end. */
+    public static final String HOST_NAME = NkapHttp.HOST;
+
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String UUID_RE = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
     private static final Pattern ONE = Pattern.compile("/adjustments/" + UUID_RE);
@@ -30,12 +33,21 @@ public final class AdjustmentProposer {
 
     private final NkapHttp http;
 
+    /** For a gateway on a private network: plain http is accepted for the one host named, and for no other. */
+    public AdjustmentProposer(String baseUrl, Supplier<String> agentKey, String plainHttpHost) {
+        this(baseUrl, agentKey, Duration.ofSeconds(10), plainHttpHost);
+    }
+
     public AdjustmentProposer(String baseUrl, Supplier<String> agentKey) {
         this(baseUrl, agentKey, Duration.ofSeconds(10));
     }
 
     AdjustmentProposer(String baseUrl, Supplier<String> agentKey, Duration timeout) {
-        this.http = new NkapHttp(baseUrl, agentKey, AdjustmentProposer::allowed, timeout);
+        this(baseUrl, agentKey, timeout, null);
+    }
+
+    AdjustmentProposer(String baseUrl, Supplier<String> agentKey, Duration timeout, String plainHttpHost) {
+        this.http = new NkapHttp(baseUrl, agentKey, AdjustmentProposer::allowed, timeout, plainHttpHost);
     }
 
     private static boolean allowed(String method, String path) {

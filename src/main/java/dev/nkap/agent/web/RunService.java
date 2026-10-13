@@ -116,7 +116,7 @@ final class RunService {
         this.clock = clock;
         this.runs = new RunTable<>(50, Duration.ofMinutes(30), clock);
         this.gateway = new GatewayClient(config.gatewayUrl(), config.agentKey());
-        this.proposer = new AdjustmentProposer(config.gatewayUrl(), config.agentKey());
+        this.proposer = new AdjustmentProposer(config.gatewayUrl(), config.agentKey(), config.internalHost());
         this.approved = new ApprovedPayments(config.stateDir().resolve("approved-payments.json"));
     }
 
@@ -279,7 +279,7 @@ final class RunService {
                 }
             }
             pending.attempts++;
-            AdjustmentApprover approver = new AdjustmentApprover(config.gatewayUrl(), self ? config.agentKey() : config.approverKey());
+            AdjustmentApprover approver = new AdjustmentApprover(config.gatewayUrl(), self ? config.agentKey() : config.approverKey(), config.internalHost());
             DecisionResult result = approver.approve(pending.adjustmentId);
             ObjectNode body = JSON.createObjectNode();
             body.put("decision", self ? "self-approve" : "approve");

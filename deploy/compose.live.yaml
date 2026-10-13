@@ -1,0 +1,16 @@
+# Turns live runs on: adds the model key file to the agent and nothing else.
+#
+#   docker compose -f compose.yaml -f deploy/compose.demo.yaml -f deploy/compose.live.yaml up -d
+#
+# Without this file the agent has no model key and live is off. That is the kill switch: run
+# `docker compose -f compose.yaml -f deploy/compose.demo.yaml up -d` again, and the agent restarts without the key.
+# The key is a file under DEMO_SECRETS_DIR, never an environment value.
+services:
+  agent:
+    environment:
+      NEBIUS_API_KEY_FILE: /run/secrets/model_key
+    secrets: [model_key]
+
+secrets:
+  model_key:
+    file: ${DEMO_SECRETS_DIR:-/etc/nkap-agent/secrets}/model-key

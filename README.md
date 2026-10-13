@@ -379,6 +379,25 @@ Nkap refuses) leaves the run open and counts as an attempt: three at most, then 
 result of a refused attempt says how many are left (`attemptsLeft`). Every attempt, and the check of the payment that goes with it,
 runs under one lock held for at most one call to Nkap (10 seconds), so two requests on one run cannot both reach Nkap as a decision.
 
+## Deploying the demonstration
+
+[`deploy/RUNBOOK.md`](deploy/RUNBOOK.md) is the runbook for running the demonstration on one small VPS, reachable only through a Cloudflare tunnel, with
+live runs off unless the operator turns them on. `deploy/` holds the `Dockerfile` of the service, `compose.demo.yaml` (a layer over
+`compose.yaml`: an internal network with no outbound access for the database, the simulator and the gateway, an edge network for the service and
+the tunnel, no published port, read-only containers with no capability, secrets as files) and `compose.live.yaml` (adds the model key and turns live
+on; leaving it out is the kill switch). `scripts/reset-demo.sh` restores the demo ledger to its seeded state, and `scripts/verify-deploy.sh` checks the
+structure locally with a fake tunnel in place of `cloudflared`. The runbook lists what only the operator can check on the VPS and in Cloudflare.
+The tunnel image is pinned to `cloudflare/cloudflared:2026.9.1` and its digest; `scripts/verify-deploy.sh` fails if any digest in `deploy/` is a placeholder.
+
+### The gateway is reached in clear text on the internal network
+
+The agent reaches the gateway over plain `http` at one named host (`NKAP_AGENT_INTERNAL_HOST=gateway`), so **the agent's key and the approver's key cross the
+`internal` network in clear text**. Everywhere else the service requires `https` or a loopback address. What compensates: the network has no outbound access; only the
+database, the simulator, the gateway and the agent are on it; every one of them has all capabilities dropped, so none can open raw sockets or sniff; and the code accepts
+exactly one host name, a single lower-case label, never a pattern, a dotted name, an upper-case name or an address. What would void the compensation: adding a container
+to `internal`, or giving one `NET_RAW`. `scripts/verify-deploy.sh` checks the list of containers on the network and the capabilities each one actually holds. The runbook
+(`deploy/RUNBOOK.md`) has the same section.
+
 ## Build
 
 Requires Java 21 and Maven.

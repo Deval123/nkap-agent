@@ -238,6 +238,45 @@ class ClientsTest {
         new AdjustmentApprover("http://localhost:8080", () -> APPROVER_KEY);
     }
 
+    @Test
+    @DisplayName("plain http is accepted for one named host only, when the operator names it: a gateway on a private network, not any host")
+    void onePlainHttpHost() {
+        new AdjustmentProposer("http://gateway:8080", () -> AGENT_KEY, "gateway");
+        new AdjustmentApprover("http://gateway:8080/", () -> APPROVER_KEY, "gateway");
+        for (String bad : List.of("http://other:8080", "http://gateway.evil.example:8080", "http://gateway@evil.example", "http://evil.example/gateway",
+                "http://gateway:80/../x", "https://", "http://gateway:notaport")) {
+            assertThatThrownBy(() -> new AdjustmentProposer(bad, () -> AGENT_KEY, "gateway")).as(bad).isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> new AdjustmentProposer("http://gateway:8080", () -> AGENT_KEY)).as("not named, not accepted")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AdjustmentApprover("http://gateway:8080", () -> APPROVER_KEY, (String) null)).isInstanceOf(IllegalArgumentException.class);
+        for (String badHost : List.of("", "Gateway Host", "a/b", "a:b", "x.y.z.com.", "-x")) {
+            assertThatThrownBy(() -> new AdjustmentProposer("http://gateway:8080", () -> AGENT_KEY, badHost)).as(badHost)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("plain http is accepted for exactly the one host named: a second host name, a host with a dot, an uppercase letter or an IP address is refused, as the address and as the name")
+    void exactlyOneHostName() {
+        String named = "gateway";
+        for (String url : List.of("http://other:8080", "http://gateway2:8080", "http://gatewa:8080", "http://gateway.internal:8080", "http://gateway.:8080",
+                "http://Gateway:8080", "http://GATEWAY:8080", "http://10.0.0.5:8080", "http://172.28.40.10:8080", "http://[fd00::5]:8080",
+                "http://gateway%2eevil:8080", "http://gateway@evil:8080", "http://gateway:8080@evil", "http://*:8080", "http://gate*:8080")) {
+            assertThatThrownBy(() -> new AdjustmentProposer(url, () -> AGENT_KEY, named)).as(url).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new AdjustmentApprover(url, () -> APPROVER_KEY, named)).as(url).isInstanceOf(IllegalArgumentException.class);
+        }
+        for (String notAHost : List.of("gateway.internal", "Gateway", "GATEWAY", "10.0.0.5", "172.28.40.10", "127.0.0.1", "123", "[::1]", "gate*", "gate?way", ".*",
+                "a b", "gateway,other", "gateway|other", "-gateway", "gateway-", "gateway:8080")) {
+            assertThatThrownBy(() -> new AdjustmentProposer("http://gateway:8080", () -> AGENT_KEY, notAHost)).as("as the named host: " + notAHost)
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new AdjustmentApprover("http://gateway:8080", () -> APPROVER_KEY, notAHost)).as("as the named host: " + notAHost)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        new AdjustmentProposer("http://gateway:8080", () -> AGENT_KEY, named);
+        new AdjustmentApprover("http://gateway", () -> APPROVER_KEY, named);
+    }
+
     // --- the key
 
     @Test
