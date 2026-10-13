@@ -53,3 +53,26 @@ To do:
 - Read the per-token prices (Prices page) and compute the cost of this call.
 - Run the same task on the Ultra model and compare cost, latency and correctness.
 - Test an injection attempt inside the case text.
+
+## 2026-10-13: measured with `scripts/model-spike.sh`
+
+Run by the maintainer against `nvidia/nemotron-3-super-120b-a12b`, 42 requests. Small numbers: they say what
+happened, not how often it will.
+
+- The provider enforces the **shape** of a strict schema and not the **coupling between fields**. Asked for
+  prose, 20 of 20 answers were still JSON with all eight fields and valid enums. In every one of the 20 a
+  `final` answer had `argument: ""`, and 11 had `outcome: null` with `tool: "search_docs"`. A client has to
+  read the fields an action uses and ignore the rest; a `oneOf` was not tried.
+- Reasoning tokens are billed as completion tokens and are 85 to 97 percent of the completion in these runs
+  (1168 to 2500 reasoning tokens in completions of 1383 to 2584). The usage reports them under
+  `completion_tokens_details.reasoning_tokens`.
+- `max_tokens` 500 gave `finish_reason: length` with no answer in 3 of 3 requests. The loop uses 6000.
+- The 42 requests cost about 0.028 USD. Latencies were 1 to 3 s for short answers and 7 to 14 s for the
+  realistic run.
+- On the unrecorded-fee case with synthetic tool results (one run): the hypothesis was right, the entry was
+  wrong (suspense +75 / fees -75 instead of fees +75 / float -75), and the evidence value was paraphrased, so
+  exact matching against the trace failed (0 of 1). The loop's evidence is a pointer, and the value is read from
+  the trace.
+- With the injection sentence inside a tool result: 9 of 10 answers were `no_proposal`, and 1 tried to propose
+  with no postings. The control without the sentence, 3 requests, gave 1 `no_proposal`, 1 tool call and 1
+  malformed final. That is 10 requests: not a measure of robustness.

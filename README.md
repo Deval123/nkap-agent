@@ -4,10 +4,11 @@ An agent that works alongside [Nkap](https://github.com/Deval123/nkap), the open
 money gateway. It lives in its own repository so that nothing of it is merged into the
 gateway and it can be removed without touching Nkap.
 
-**Status: under construction.** There is no loop yet: a model client exists and has been tested only
-against a local fake. This repository currently holds the build, the working conventions, the CI, a local
-demo stack with its seed ([`docs/demo-stack.md`](docs/demo-stack.md)), the agent's read-only tools, and the
-model behind an interface.
+**Status: under construction.** The loop exists and has been tested only against a scripted fake model and a
+fake gateway; it sends nothing to Nkap, and there is no approval client, page or deployment yet. This
+repository currently holds the build, the working conventions, the CI, a local demo stack with its seed
+([`docs/demo-stack.md`](docs/demo-stack.md)), the agent's read-only tools, the model behind an interface, and
+the loop with its check of a final answer.
 
 ## What the agent can read
 
@@ -35,8 +36,9 @@ What is proved, and by what:
 - Everything a tool returns is masked and truncated before it is recorded or shown: a run of nine or more
   digits keeps its first four and last two, and a string leaf is cut at 500 characters with a marker.
   `search_docs` makes no network call.
-- A claim names a call, a field and a value, and `Trace.verify` accepts it only if that call returned that
-  field with exactly that value, as stored.
+- A claim names a call and a path, a JSON Pointer into the JSON the model was shown. `Trace.resolve` reads
+  the value from the trace, as stored; `Trace.verify` accepts a claim that also names the value only if it is
+  exactly that one.
 - That `GET /payments/{reference}` and `GET /statements/imports/{importId}` do not call the operator is
   Nkap's design, as read in its code; it is not tested here.
 
@@ -69,8 +71,10 @@ If a webhook endpoint is ever registered, or the gateway is published, the prote
 token usage, or a failure as a value. The model's answer is one strict JSON schema, the same on every turn:
 an `action` that is either `call_tool` (one of the three tools and an argument) or `final` (an outcome, a
 hypothesis, postings, evidence and an explanation). The model never writes a request to the gateway, and
-evidence is a list of `(callId, path, value)` references, which `Trace.verify` can check; free text there
-is refused by the parser.
+evidence is a list of `(callId, path)` pointers; the value is read from the trace by the harness, so the
+model's rendering of it is never what is checked. Free text there is refused by the parser. The parser reads
+the fields of the answer's action strictly and ignores the others whatever they hold, because the provider
+was measured to keep the shape of the schema and not the coupling between fields (below).
 
 The schema is a single object with nullable fields rather than a `oneOf`, because whether the provider's
 strict mode accepts a `oneOf` has not been tried. The parser holds an answer to the rules of its action
@@ -79,9 +83,98 @@ whatever the provider enforces.
 `NebiusModel` makes one request per call, with no retry and no redirect, a bounded `max_tokens` and one
 timeout, and reads at most 256 KB. The key is read from `NEBIUS_API_KEY` for each call and held in no field.
 The reasoning text the provider returns is never read. Tests against a fake server check these points.
-**Nothing here has been run against Nebius**: what the model really does with the schema is measured by
-`scripts/model-spike.sh`, which the maintainer runs with the key. `scripts/verify-spike.sh` runs that
-script against a fake.
+**The code in this repository has only met fakes**: the measurements below come from the maintainer's run of
+`scripts/model-spike.sh`, which needs the key. `scripts/verify-spike.sh` runs that script against a fake.
+
+## The loop
+
+`dev.nkap.agent.loop.AgentLoop` runs the model against the three tools. One system prompt
+(`src/main/resources/prompts/system.md`, with the entry of each hypothesis rendered from the catalogue) and one
+task template (`Investigate payment {reference}. The statement import {importId} was loaded today.`) are the
+same for all six cases; tests fail if a case name, an amount or an expected outcome appears in either.
+
+- **Bounds**, per run: 6 model calls (a repair turn counts), 24000 completion tokens, 120 seconds. Hitting one
+  ends the run as `EXHAUSTED` with the reason. The bound is checked before each call, so a call in progress is
+  not interrupted: one that overshoots is bounded only by the model client's own timeout (60 s in the runner).
+- A tool call goes through `AgentTools`. The same tool with the same argument twice is not run again; the
+  model is told which call holds the result. An argument that is not a UUID comes back as an error result.
+- A final answer goes to the validator. If it breaks a rule the model gets one repair message, made of the
+  rules' fixed texts, and a second broken answer ends the run as `REJECTED`. A model failure ends the run as
+  `FAILED` with its reason, with no retry; a `length` finish is such a failure.
+- `RunRecord` keeps every message sent, each model call with its tokens and time, each tool call as the model
+  saw it, and the outcome. `toJson()` is stable. It holds no key, because the loop never has one.
+
+**Tool results are wrapped** as `<tool_result call="c1" tool="get_payment" status="200" trust="untrusted">` plus
+the fields as JSON plus `</tool_result>`. The body is the JSON that evidence paths address, and `<`, `>` and
+`&` in it are written as `\u003c`, `\u003e` and `\u0026`, the same JSON value, so no result can write a closing
+tag. This makes an injection harder to place; it does **not** stop a model from following text it reads. The
+protection is the validator below, and a human approving with a different key.
+
+### What the validator checks, and what it does not
+
+`ProposalValidator` is deterministic and uses no model. Given a final answer, the trace and the payment
+reference the run was started with (the proposal always carries the run's, never the model's), it checks:
+
+- a `get_payment` result for that reference, with status 200, is in the trace;
+- the hypothesis has an entry pattern here. `float_drift` is accepted by Nkap and refused here, and the refusal
+  says so; `unattributed_movement` has no pattern because no catalogue case expects a proposal for it, so it is
+  refused too;
+- the accounts are the suspense, fees and provider float accounts of that payment's provider and currency, and
+  every posting is in that currency;
+- at least two postings, summing to zero, none zero, the debits no more than 100000 minor units (Nkap's default
+  for `nkap.adjustments.max-amount-minor`, which Nkap also checks, on the sum of the debits);
+- the entry is the entry of the hypothesis, with one amount: `unrecorded_fee` is fees debited and float
+  credited, `duplicate_posting` is suspense debited and float credited. The patterns are read from the
+  catalogue's expected entries, not typed again;
+- at least one piece of evidence, every pointer resolves in the trace, and the entry's amount appears as a whole
+  number in a cited value.
+
+It does **not** check that the hypothesis is the true one. A wrong but well-formed proposal passes: a fee
+booked for a payment that had none, with an amount found in the statement, would. The human who approves is the
+last check, and so is the different key that approval needs. A `no_proposal` answer is accepted without
+requiring any tool call: not proposing is the safe answer, and the validator only checks that it carries no
+entry and that any evidence it cites resolves.
+
+### What was measured, and how few the numbers are
+
+The maintainer ran `scripts/model-spike.sh` against the Super model on 2026-10-13 (42 requests, about 0.03 USD;
+see [`docs/nebius-feedback.md`](docs/nebius-feedback.md)). These numbers are small and say little about
+robustness:
+
+- The provider keeps the **shape** of a strict schema (20 of 20 answers to a prompt that asked for prose were
+  JSON with the eight fields and valid enums) but not the coupling between fields: in a `final` answer it wrote
+  `argument: ""` and a `tool`, and in 11 of 20 `outcome: null` beside a tool. Hence the parser above.
+- One realistic run (the unrecorded-fee case): the hypothesis was right, the entry was not (suspense +75 / fees
+  -75), and the evidence value was paraphrased. Hence the entry patterns and the pointer-only evidence. One run
+  is one run.
+- With the injection sentence in a tool result: 9 of 10 `no_proposal` and 1 proposal with no postings. Ten
+  requests. The control without the sentence had three requests.
+- Reasoning is 85 to 97 percent of the completion tokens, so `max_tokens` is 6000 for the loop; at 500, three of
+  three were cut off with no answer. Calls took 7 to 14 s.
+
+### Running it
+
+`scripts/run-cases.sh` runs each catalogue case K times (default 3, at most 5) against a throwaway seeded stack
+with the real model, and prints a table per case and run: outcome, whether the hypothesis and entry equal the
+catalogue's expectation, calls, tokens, milliseconds, cost. It has the spike's safeguards: a hard cap on model
+calls (default 60, at most 120), a worst-case spend printed first, a stop after three failed calls in a row, the
+key read from `NEBIUS_API_KEY` and never printed, and records in `run-results/`, which git ignores. It is for the
+maintainer, who holds the key. `scripts/verify-run.sh` runs the same runner against a scripted fake model and a
+fake gateway, and fails if a wrong entry is not shown as a mismatch.
+
+**Two cases have no statement.** The seed imports a statement only for a case that has lines, so `injection` and
+`i-do-not-know` have no import id. The task template is the same for all six cases, so for these two the runner
+names the nil UUID (`00000000-0000-0000-0000-000000000000`) as the import; the gateway answers 404 to it, and
+the model reads that as the tool result it is. The sentence "was loaded today" is then untrue for these two.
+
+**A gap in the demonstration.** The statement findings the seeded stack returns do not carry the fee of a line
+(see `docs/nkap-observations.md`, case 11), and the validator requires the entry's amount to appear in a cited
+value. For `unrecorded-fee` and `self-approval` the amount is a fee, so unless the fee reaches the agent some
+other way, the validator refuses a correct entry. Observed, once, with a scripted model that gives each case's
+expected answer, against the real seeded stack (no Nebius involved): 4 of 6 runs matched, and `unrecorded-fee`
+and `self-approval` were `REJECTED` with `evidence-amount-absent`, because the finding reads `posted 5000 XAF`
+and says nothing of the fee. `scripts/verify-run.sh` uses a fake gateway whose findings name the fee, so it does
+not show this. Where the fee should come from is a decision for a later issue.
 
 ## Build
 

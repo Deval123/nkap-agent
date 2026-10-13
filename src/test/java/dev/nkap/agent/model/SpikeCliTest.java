@@ -71,8 +71,8 @@ class SpikeCliTest {
     void realisticFixture() throws IOException {
         run("", "fixtures", dir.toString());
         String text = all(read("m3-realistic.messages.json"));
-        assertThat(text).contains("5000").contains("75").contains("FT-UF-0001").contains("\"callId\":\"c1\"")
-                .contains("\"callId\":\"c2\"");
+        assertThat(text).contains("5000").contains("75").contains("FT-UF-0001").contains("call=\"c1\"")
+                .contains("call=\"c2\"");
         assertThat(text).as("the telephone number is masked as the tools mask it").doesNotContain("447700900001")
                 .contains("4477");
         assertThat(text).contains("synthetic");
@@ -96,18 +96,18 @@ class SpikeCliTest {
             + "\"hypothesis\":\"unrecorded_fee\",\"postings\":["
             + "{\"account\":\"fees:mtn-cm:XAF\",\"amountMinor\":75,\"currency\":\"XAF\"},"
             + "{\"account\":\"provider:mtn-cm:float:XAF\",\"amountMinor\":-75,\"currency\":\"XAF\"}],"
-            + "\"evidence\":[{\"callId\":\"c2\",\"path\":\"/findings/0/kind\",\"value\":\"SUSPENSE_POSTED\"},"
-            + "{\"callId\":\"c1\",\"path\":\"/state\",\"value\":\"UNKNOWN\"}],\"explanation\":\"A fee of 75.\"}";
+            + "\"evidence\":[{\"callId\":\"c2\",\"path\":\"/findings/0/kind\"},"
+            + "{\"callId\":\"c1\",\"path\":\"/state\"}],\"explanation\":\"A fee of 75.\"}";
 
     @Test
-    @DisplayName("check --expect judges a final answer against the case: hypothesis, postings, and every evidence reference against the trace")
+    @DisplayName("check --expect judges a final answer against the case: hypothesis, postings, and every evidence pointer against the trace")
     void checkAgainstTheCase() {
         String right = run(JSON.valueToTree(GOOD_FINAL) + "\n", "check", "--expect", "unrecorded-fee");
         assertThat(right).isEqualTo("ok final/propose hypothesis=right postings=right evidence=2/2\n");
 
         String wrongHypothesis = GOOD_FINAL.replace("unrecorded_fee", "float_drift");
         String wrongAmount = GOOD_FINAL.replace("\"amountMinor\":75", "\"amountMinor\":57");
-        String invented = GOOD_FINAL.replace("\"UNKNOWN\"", "\"FAILED\"");
+        String invented = GOOD_FINAL.replace("\"/state\"", "\"/status\"");
         String input = JSON.valueToTree(wrongHypothesis) + "\n" + JSON.valueToTree(wrongAmount) + "\n"
                 + JSON.valueToTree(invented) + "\n";
         List<String> lines = run(input, "check", "--expect", "unrecorded-fee").lines().toList();

@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.nkap.agent.scenario.Hypothesis;
 import dev.nkap.agent.tools.AgentTools;
-import dev.nkap.agent.tools.EvidenceRef;
+import dev.nkap.agent.tools.EvidencePointer;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,7 +62,7 @@ class AnswerSchemaTest {
         assertThat(fieldNames(props.get("postings").get("items").get("properties")))
                 .containsExactlyInAnyOrderElementsOf(names(Posting.class));
         assertThat(fieldNames(props.get("evidence").get("items").get("properties")))
-                .containsExactlyInAnyOrderElementsOf(names(EvidenceRef.class));
+                .containsExactlyInAnyOrderElementsOf(names(EvidencePointer.class));
     }
 
     @Test
@@ -159,7 +159,7 @@ class AnswerSchemaTest {
         ModelAnswer answer = parse(proposal());
         assertThat(answer).isEqualTo(new ModelAnswer.Final(ModelAnswer.Verdict.PROPOSE, Hypothesis.UNRECORDED_FEE,
                 List.of(new Posting("fees:mtn-cm:XAF", 75, "XAF"), new Posting("provider:mtn-cm:float:XAF", -75, "XAF")),
-                List.of(new EvidenceRef("c1", "/history/0/operatorCode", "x")), "A fee of 75 was not recorded."));
+                List.of(new EvidencePointer("c1", "/history/0/operatorCode")), "A fee of 75 was not recorded."));
     }
 
     @Test
@@ -183,11 +183,13 @@ class AnswerSchemaTest {
     }
 
     @Test
-    @DisplayName("an evidence reference with a missing or extra field is refused")
+    @DisplayName("an evidence pointer is a call id and a path and nothing else: a value the model adds is refused, a missing path too")
     void evidenceFieldsAreExact() {
-        assertThat(violation(proposal().replace("\"value\":\"x\"", "\"value\":null"))).contains("evidence[0].value");
-        assertThat(violation(proposal().replace("\"value\":\"x\"", "\"value\":\"x\",\"why\":\"y\""))).contains("evidence[0]");
+        assertThat(violation(proposal().replace("\"path\":\"/history/0/operatorCode\"",
+                "\"path\":\"/history/0/operatorCode\",\"value\":\"x\""))).contains("evidence[0]");
         assertThat(violation(proposal().replace("\"callId\":\"c1\",", ""))).contains("evidence[0]");
+        assertThat(violation(proposal().replace("\"path\":\"/history/0/operatorCode\"", "\"path\":null")))
+                .contains("evidence[0].path");
     }
 
     @Test
@@ -197,12 +199,39 @@ class AnswerSchemaTest {
     }
 
     @Test
-    @DisplayName("a call_tool answer with a missing or blank argument, or with final fields set, is refused")
+    @DisplayName("a call_tool answer needs a non-blank argument")
     void callToolShape() {
         assertThat(violation(callTool("get_payment", null))).contains("argument");
         assertThat(violation(callTool("get_payment", " "))).contains("argument");
-        assertThat(violation(callTool("get_payment", UUID).replace("\"outcome\":null", "\"outcome\":\"propose\"")))
-                .contains("outcome");
+    }
+
+    @Test
+    @DisplayName("the shapes the provider really produced are accepted: a final with argument \"\" and a tool, a final with outcome and a tool")
+    void measuredShapes() throws Exception {
+        String withArgument = proposal().replace("\"tool\":null,\"argument\":null", "\"tool\":\"search_docs\",\"argument\":\"\"");
+        assertThat(parse(withArgument)).isEqualTo(parse(proposal()));
+        String withTool = noProposal("null", "[]").replace("\"tool\":null", "\"tool\":\"get_payment\"");
+        assertThat(parse(withTool)).isEqualTo(parse(noProposal("null", "[]")));
+    }
+
+    @Test
+    @DisplayName("a call_tool answer's final-only fields are ignored whatever they hold, and are not kept")
+    void callToolIgnoresFinalFields() throws Exception {
+        String junk = callTool("get_payment", UUID).replace("\"outcome\":null", "\"outcome\":\"propose\"")
+                .replace("\"hypothesis\":null", "\"hypothesis\":\"nonsense\"")
+                .replace("\"postings\":null", "\"postings\":\"free text\"")
+                .replace("\"explanation\":null", "\"explanation\":\"SECRET-MODEL-TEXT\"");
+        ModelAnswer answer = parse(junk);
+        assertThat(answer).isEqualTo(new ModelAnswer.CallTool("get_payment", UUID));
+        assertThat(answer.toString()).doesNotContain("SECRET-MODEL-TEXT");
+    }
+
+    @Test
+    @DisplayName("a final answer with outcome null is refused, even beside a tool: it says nothing")
+    void finalNeedsAnOutcome() {
+        String json = proposal().replace("\"outcome\":\"propose\"", "\"outcome\":null")
+                .replace("\"tool\":null", "\"tool\":\"search_docs\"");
+        assertThat(violation(json)).contains("outcome");
     }
 
     @Test
@@ -241,7 +270,7 @@ class AnswerSchemaTest {
     @DisplayName("a property outside the schema, a missing property, and anything but an object are refused")
     void shapeOfTheObject() {
         assertThat(violation(callTool("get_payment", UUID).replace("{", "{\"thinking\":\"...\","))).contains("outside the schema");
-        assertThat(violation("{\"action\":\"call_tool\"}")).contains("missing");
+        assertThat(violation("{\"action\":\"call_tool\"}")).contains("tool");
         assertThat(violation("[]")).contains("object");
         assertThat(violation("\"final\"")).contains("object");
         assertThat(violation("not json")).contains("not JSON");
@@ -268,18 +297,30 @@ class AnswerSchemaTest {
                 + "\"hypothesis\":\"unrecorded_fee\",\"postings\":["
                 + "{\"account\":\"fees:mtn-cm:XAF\",\"amountMinor\":75,\"currency\":\"XAF\"},"
                 + "{\"account\":\"provider:mtn-cm:float:XAF\",\"amountMinor\":-75,\"currency\":\"XAF\"}],"
-                + "\"evidence\":[{\"callId\":\"c1\",\"path\":\"/history/0/operatorCode\",\"value\":\"x\"}],"
+                + "\"evidence\":[{\"callId\":\"c1\",\"path\":\"/history/0/operatorCode\"}],"
                 + "\"explanation\":\"A fee of 75 was not recorded.\"}";
     }
 
     private static String noProposal(String hypothesis, String postings) {
         return "{\"action\":\"final\",\"tool\":null,\"argument\":null,\"outcome\":\"no_proposal\","
                 + "\"hypothesis\":" + hypothesis + ",\"postings\":" + postings + ","
-                + "\"evidence\":[{\"callId\":\"c1\",\"path\":\"/state\",\"value\":\"SUCCEEDED\"}],"
+                + "\"evidence\":[{\"callId\":\"c1\",\"path\":\"/state\"}],"
                 + "\"explanation\":\"Nothing to adjust.\"}";
     }
 
     private static String quote(String s) {
         return s == null ? "null" : JSON.valueToTree(s).toString();
+    }
+
+    @Test
+    @DisplayName("toJson writes the eight-field object, and what it writes parses back to the same answer")
+    void roundTrip() throws Exception {
+        for (String json : List.of(callTool("get_payment", UUID), proposal(), noProposal("null", "[]"))) {
+            ModelAnswer answer = parse(json);
+            String written = AnswerSchema.toJson(answer);
+            assertThat(fieldNames(JSON.readTree(written))).containsExactlyInAnyOrder("action", "tool", "argument",
+                    "outcome", "hypothesis", "postings", "evidence", "explanation");
+            assertThat(parse(written)).isEqualTo(answer);
+        }
     }
 }

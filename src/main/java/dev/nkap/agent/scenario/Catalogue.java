@@ -36,6 +36,24 @@ public final class Catalogue {
     private Catalogue() {
     }
 
+    /**
+     * The entry pattern of each hypothesis a case expects a proposal for. Two cases with the same hypothesis
+     * must agree, or the catalogue contradicts itself.
+     */
+    public static java.util.Map<Hypothesis, EntryPattern> patterns() {
+        java.util.Map<Hypothesis, EntryPattern> patterns = new java.util.LinkedHashMap<>();
+        for (ScenarioCase c : ALL) {
+            c.proposal().ifPresent(p -> {
+                EntryPattern pattern = EntryPattern.of(p);
+                EntryPattern earlier = patterns.putIfAbsent(p.hypothesis(), pattern);
+                if (earlier != null && !earlier.equals(pattern)) {
+                    throw new IllegalStateException("cases disagree on the entry of " + p.hypothesis());
+                }
+            });
+        }
+        return patterns;
+    }
+
     /** The cases, in the order the demonstration presents them. */
     public static List<ScenarioCase> all() {
         return ALL;

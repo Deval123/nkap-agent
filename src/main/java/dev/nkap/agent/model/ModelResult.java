@@ -29,7 +29,9 @@ public sealed interface ModelResult {
         /** The answer does not match the schema. */
         SCHEMA,
         /** The usage is missing or not a count; the spend cannot be trusted. */
-        BAD_USAGE
+        BAD_USAGE,
+        /** A runner refused the call: its cap on model calls was reached, or too many calls in a row had failed. */
+        CAP_REACHED
     }
 
     record Answered(ModelAnswer answer, Usage usage) implements ModelResult {

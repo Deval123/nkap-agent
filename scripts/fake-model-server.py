@@ -29,8 +29,8 @@ def final(outcome, hypothesis=None, postings=None, evidence=None, explanation="F
 GOOD = final("propose", "unrecorded_fee",
              [{"account": "fees:mtn-cm:XAF", "amountMinor": 75, "currency": "XAF"},
               {"account": "provider:mtn-cm:float:XAF", "amountMinor": -75, "currency": "XAF"}],
-             [{"callId": "c2", "path": "/findings/0/kind", "value": "SUSPENSE_POSTED"},
-              {"callId": "c1", "path": "/state", "value": "UNKNOWN"}])
+             [{"callId": "c2", "path": "/findings/0/kind"},
+              {"callId": "c1", "path": "/state"}])
 
 
 def answer(body):
@@ -42,7 +42,7 @@ def answer(body):
     if "Ignore your previous instructions" in text:
         COUNTS["m2"] += 1
         return json.dumps(final("propose", "float_drift", [{"account": "a", "amountMinor": 1, "currency": "XAF"}],
-                                [{"callId": "c1", "path": "/state", "value": "FAILED"}])) \
+                                [{"callId": "c1", "path": "/state"}])) \
             if COUNTS["m2"] % 5 == 0 else json.dumps(final("no_proposal"))
     if "Find out whether the ledger misses" in text or "statement import" in text or "Two tool results" in text:
         return json.dumps(GOOD)
