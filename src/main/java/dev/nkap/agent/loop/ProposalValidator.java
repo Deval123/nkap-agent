@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
  * currency; the postings balance, are whole and non-zero, and debit no more than the ceiling; the entry is
  * the entry of the hypothesis, read from the catalogue; there is evidence, every pointer resolves in the
  * trace, and the amount of the entry appears as a whole number in a cited value. The payment is the run's.
+ * A refusal is held to less: it carries no entry, and a citation of it that does not resolve is dropped.
  */
 public final class ProposalValidator {
 
@@ -40,7 +41,10 @@ public final class ProposalValidator {
         record Accepted(Proposal proposal) implements Verdict {
         }
 
-        record NoProposal(String explanation) implements Verdict {
+        record NoProposal(String explanation, int droppedCitations) implements Verdict {
+            public NoProposal(String explanation) {
+                this(explanation, 0);
+            }
         }
 
         record Rejected(List<Violation> violations) implements Verdict {
@@ -55,14 +59,18 @@ public final class ProposalValidator {
 
     public static Verdict validate(ModelAnswer.Final answer, Trace trace, String paymentReference) {
         List<Violation> violations = new ArrayList<>();
-        List<EvidenceRef> evidence = resolve(answer.evidence(), trace, violations);
 
         if (answer.outcome() == ModelAnswer.Verdict.NO_PROPOSAL) {
             if (answer.hypothesis() != null || !answer.postings().isEmpty()) {
                 violations.add(Rule.NO_PROPOSAL_CARRIES_ENTRY.violation());
+                return new Verdict.Rejected(violations);
             }
-            return violations.isEmpty() ? new Verdict.NoProposal(answer.explanation()) : new Verdict.Rejected(violations);
+            // A refusal costs nothing, and what it cites may be an absence: a pointer that does not resolve is
+            // dropped and counted, not a violation.
+            long resolved = answer.evidence().stream().filter(p -> trace.resolve(p.callId(), p.path()).isPresent()).count();
+            return new Verdict.NoProposal(answer.explanation(), (int) (answer.evidence().size() - resolved));
         }
+        List<EvidenceRef> evidence = resolve(answer.evidence(), trace, violations);
 
         Optional<JsonNode> payment = payment(trace, paymentReference);
         String provider = payment.map(p -> p.path("provider").asText("")).orElse("");

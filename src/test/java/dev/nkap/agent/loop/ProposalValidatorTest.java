@@ -214,9 +214,60 @@ class ProposalValidatorTest {
         ModelAnswer.Final carrying = new ModelAnswer.Final(ModelAnswer.Verdict.NO_PROPOSAL, Hypothesis.UNRECORDED_FEE, fee(75),
                 List.of(), "Not enough.");
         assertThat(codes(check(carrying, trace))).containsExactly("no-proposal-carries-entry");
+    }
+
+    @Test
+    @DisplayName("a refusal that cites pointers which do not resolve is still a refusal: they are dropped and counted, with no violation")
+    void refusalDropsUnresolvedCitations() {
+        Trace trace = trace(5000, 75);
         ModelAnswer.Final citing = new ModelAnswer.Final(ModelAnswer.Verdict.NO_PROPOSAL, null, List.of(),
-                List.of(new EvidencePointer("c7", "/x")), "Not enough.");
-        assertThat(codes(check(citing, trace))).containsExactly("evidence-unresolved");
+                List.of(new EvidencePointer("c7", "/x"), new EvidencePointer("c1", "/state"), new EvidencePointer("c1", "/fields/state")),
+                "Not enough.");
+        assertThat(check(citing, trace)).isEqualTo(new ProposalValidator.Verdict.NoProposal("Not enough.", 2));
+    }
+
+    @Test
+    @DisplayName("the case from the first run: a refusal citing a null paymentReference and an empty providerTransactionId is accepted as it stands")
+    void refusalCitingAbsence() {
+        Trace trace = new Trace();
+        ObjectNode payment = JSON.createObjectNode();
+        payment.put("provider", P);
+        payment.put("currency", C);
+        payment.put("providerTransactionId", "");
+        trace.record("get_payment", Map.of("reference", REF), 200, payment);
+        ObjectNode report = JSON.createObjectNode();
+        report.putArray("findings").addObject().putNull("paymentReference");
+        trace.record("get_statement_findings", Map.of("importId", IMPORT), 200, report);
+        ModelAnswer.Final refusal = new ModelAnswer.Final(ModelAnswer.Verdict.NO_PROPOSAL, null, List.of(),
+                List.of(new EvidencePointer("c2", "/findings/0/paymentReference"), new EvidencePointer("c1", "/providerTransactionId")),
+                "No payment is attached, and nothing shows what happened.");
+        assertThat(check(refusal, trace)).isEqualTo(new ProposalValidator.Verdict.NoProposal(
+                "No payment is attached, and nothing shows what happened.", 0));
+    }
+
+    @Test
+    @DisplayName("a proposal that cites a pointer which does not resolve is still refused")
+    void proposalStillNeedsEveryPointerToResolve() {
+        List<EvidencePointer> cites = List.of(new EvidencePointer("c2", "/findings/0/detail"), new EvidencePointer("c2", "/findings/9/detail"));
+        assertThat(codes(check(propose(Hypothesis.UNRECORDED_FEE, fee(75), cites), trace(5000, 75)))).contains("evidence-unresolved");
+    }
+
+    @Test
+    @DisplayName("a null or an empty string cannot satisfy the amount check: a proposal whose only citations are those is refused")
+    void absenceIsNotAnAmount() {
+        Trace trace = new Trace();
+        ObjectNode payment = JSON.createObjectNode();
+        payment.put("provider", P);
+        payment.put("currency", C);
+        payment.putNull("paymentReference");
+        payment.put("providerTransactionId", "");
+        trace.record("get_payment", Map.of("reference", REF), 200, payment);
+        for (String path : List.of("/paymentReference", "/providerTransactionId")) {
+            assertThat(codes(check(propose(Hypothesis.UNRECORDED_FEE, fee(75), List.of(new EvidencePointer("c1", path))), trace)))
+                    .as(path).containsExactly("evidence-amount-absent");
+        }
+        assertThat(codes(check(propose(Hypothesis.UNRECORDED_FEE, fee(0), List.of(new EvidencePointer("c1", "/providerTransactionId"))), trace)))
+                .as("an amount of zero is refused anyway").contains("zero-amount");
     }
 
     @Test

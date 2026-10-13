@@ -162,8 +162,23 @@ class AgentLoopTest {
         assertThat(gateway.requests).isEmpty();
         Message result = model.seen.get(1).get(model.seen.get(1).size() - 1);
         assertThat(result.role()).isEqualTo(Message.Role.TOOL_RESULT);
-        assertThat(result.content()).contains("status=\"0\"").contains("invalid-argument");
+        assertThat(result.content()).contains("status=\"0\"").contains("invalid-argument")
+                .contains("The argument must be the bare UUID, with no name and no quotes.");
+        assertThat(result.content()).as("the refused value is not echoed back").doesNotContain("not-a-uuid");
         assertThat(record.modelCalls()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a refusal that cites an absent value and a pointer that does not resolve ends as NO_PROPOSAL with no repair, and the record counts the dropped citation")
+    void refusalWithCitationsIsNotRepaired() throws Exception {
+        gateway.serve("/statements/imports/" + IMPORT, "{\"findings\":[{\"paymentReference\":null,\"detail\":\"x\"}]}");
+        ModelAnswer.Final refusal = new ModelAnswer.Final(ModelAnswer.Verdict.NO_PROPOSAL, null, List.of(),
+                List.of(new EvidencePointer("c2", "/findings/0/paymentReference"), new EvidencePointer("c2", "/findings/1/x")),
+                "No payment holds the line.");
+        RunRecord record = run(looksThenAnswers(refusal));
+        assertThat(record.outcome()).isEqualTo(new RunOutcome.NoProposal("No payment holds the line.", 1));
+        assertThat(record.modelCalls()).as("no repair turn").isEqualTo(3);
+        assertThat(JSON.readTree(record.toJson()).get("outcome").get("droppedCitations").asInt()).isEqualTo(1);
     }
 
     // --- the bounds
