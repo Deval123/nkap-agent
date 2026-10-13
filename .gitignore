@@ -1,0 +1,22 @@
+target/
+*.class
+*.jar
+*.war
+
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+.DS_Store
+Thumbs.db
+
+.env
+*.env
+*.local
+application-local.yml
+
+# Working notes for the current session, kept out of the repository
+PLAN.md
+STATE.md
