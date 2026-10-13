@@ -1,0 +1,6 @@
+# Layered over Nkap's compose.yaml by scripts/observe.sh to switch adjustments on. It is its own
+# file so that the case which observes the off state can start the gateway without it.
+services:
+  gateway:
+    environment:
+      NKAP_ADJUSTMENTS_ENABLED: "true"
