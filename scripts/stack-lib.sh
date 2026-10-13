@@ -17,8 +17,10 @@ done
 docker info >/dev/null 2>&1 || { echo "docker is not available" >&2; exit 1; }
 
 dc() {
-  docker compose -p "$PROJECT" --project-directory "$root" --profile tools \
-    -f "$root/compose.yaml" -f "$root/compose.seed.yaml" "$@"
+  local files=(-f "$root/compose.yaml" -f "$root/compose.seed.yaml")
+  # SEED_COMPOSE_EXTRA names one more compose file, for a run that needs a loopback port.
+  [ -n "${SEED_COMPOSE_EXTRA:-}" ] && files+=(-f "$SEED_COMPOSE_EXTRA")
+  docker compose -p "$PROJECT" --project-directory "$root" --profile tools "${files[@]}" "$@"
 }
 psql() { dc exec -T db psql -U nkap -d nkap -tAc "$1"; }
 
@@ -41,12 +43,23 @@ api() {
   body="${out%$'\n'*}"
 }
 
-# mint LABEL [admin] -> prints the key, once. Merchant acme.
+# mint LABEL [admin [MERCHANT]] -> prints the key, once. Merchant acme unless one is given.
 mint() {
   local extra=()
   [ "${2:-}" = admin ] && extra=(--nkap.apikey.admin)
-  dc run --rm -T gateway --nkap.apikey.create --nkap.apikey.merchant=acme --nkap.apikey.label="$1" \
-    ${extra[@]+"${extra[@]}"} 2>/dev/null | awk '/^  key: /{print $2}'
+  dc run --rm -T gateway --nkap.apikey.create --nkap.apikey.merchant="${3:-acme}" --nkap.apikey.label="$1" \
+    ${extra[@]+"${extra[@]}"} 2>/dev/null </dev/null | awk '/^  key: /{print $2}'
+}
+
+failures=0
+# expect DESCRIPTION ACTUAL EXPECTED: prints ok, or FAIL on stderr and counts it.
+expect() {
+  if [ "$2" = "$3" ]; then
+    printf '  ok    %s\n' "$1"
+  else
+    printf '  FAIL  %s: got [%s], expected [%s]\n' "$1" "$2" "$3" >&2
+    failures=$((failures + 1))
+  fi
 }
 
 # generate DIR -> writes the catalogue's files into the empty directory DIR.
