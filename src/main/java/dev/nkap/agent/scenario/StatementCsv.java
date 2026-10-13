@@ -4,7 +4,7 @@ package dev.nkap.agent.scenario;
  * Renders a case's statement in the format Nkap's {@code CsvStatementParser} reads: the header below,
  * then one row per line. No quoting, no embedded commas, LF line endings.
  */
-final class StatementCsv {
+public final class StatementCsv {
 
     /** Copied from {@code CsvStatementParser.HEADER} in Nkap. */
     static final String HEADER = "operator_transaction_id,amount_minor,fee_minor,currency,occurred_at,status";
@@ -12,7 +12,7 @@ final class StatementCsv {
     private StatementCsv() {
     }
 
-    static String render(ScenarioCase scenario) {
+    public static String render(ScenarioCase scenario) {
         if (scenario.lines().isEmpty()) {
             throw new IllegalArgumentException("case " + scenario.id() + " has no statement lines");
         }

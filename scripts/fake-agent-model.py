@@ -3,7 +3,7 @@
 
 Usage: fake-agent-model.py SCRIPT.json LOGFILE [EXPECTED_KEY]
 SCRIPT.json maps a payment reference to the final answer the model gives for it. The model first asks for
-get_payment, then for get_statement_findings, then gives that final answer: it knows which step it is at from
+get_payment, then for get_statement_findings, then for get_statement_lines, then gives that final answer: it knows which step it is at from
 the number of tool_result blocks in the conversation. It prints the port it listens on (loopback). Each request
 appends one line to LOGFILE: the max_tokens and whether the bearer matched. The key is never written down. If
 EXPECTED_KEY is given and the bearer does not match, the answer is a 401.
@@ -33,6 +33,8 @@ def answer(body):
         return call_tool("get_payment", ids[0])
     if results == 1:
         return call_tool("get_statement_findings", ids[1])
+    if results == 2:
+        return call_tool("get_statement_lines", ids[1])
     return SCRIPT[ids[0]]
 
 

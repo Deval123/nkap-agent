@@ -59,8 +59,11 @@ public final class ToolsCli {
 
     public static void main(String[] args) {
         String url = System.getenv().getOrDefault("NKAP_GATEWAY_URL", "http://127.0.0.1:8080");
+        String statements = System.getenv("NKAP_STATEMENTS_DIR");
+        StatementStore store = statements == null || statements.isBlank() ? id -> java.util.Optional.empty()
+                : new DirectoryStatementStore(java.nio.file.Path.of(statements));
         AgentTools tools = new AgentTools(new GatewayClient(url, GatewayClient.agentKeyFromEnvironment()),
-                DocsIndex.bundled(), new Trace());
+                DocsIndex.bundled(), store, new Trace());
         System.exit(run(args, tools, System.out));
     }
 }

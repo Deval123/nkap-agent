@@ -4,7 +4,8 @@
 #   2. posts the generated simulator document;
 #   3. creates the six cases' payments, and waits until each is where it must be;
 #   4. imports each case's statement;
-#   5. writes seed-manifest.json: for each case the payment reference and the statement import id.
+#   5. keeps a copy of each statement, as $OUT/statements/<importId>.csv, for the agent's statement tool;
+#   6. writes seed-manifest.json: for each case the payment reference and the statement import id.
 #
 # The keys go to seed-keys.env, mode 600, and nowhere else: not to the output, not to the manifest.
 # Both files are written to $SEED_OUT (default: the repository root), where git ignores them.
@@ -98,6 +99,10 @@ while IFS=$'\t' read -r case_id statement lines; do
   set -e
   import_id="$(sed -n 's/^Statement import \([0-9a-f-]\{36\}\) .*/\1/p' "$work/import.raw")"
   [ "$(printf '%s\n' "$import_id" | grep -c .)" = 1 ] || die "no single import id in the output for $case_id"
+  # The agent's statement tool reads the file the gateway imported, by the import id. Only the file is copied;
+  # nothing of it is printed.
+  mkdir -p "$OUT/statements"
+  cp "$work/files/$statement" "$OUT/statements/$import_id.csv"
   printf '%s\t%s\n' "$case_id" "$import_id" >>"$work/imports.tsv"
   echo "  $case_id: import $import_id, $lines line(s), exit code $code"
 done < <(jq -r '.cases[] | select(.statement) | [.id, .statement, .statementLines] | @tsv' "$cases")

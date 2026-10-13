@@ -8,8 +8,10 @@ import dev.nkap.agent.model.ModelAnswer;
 import dev.nkap.agent.model.Posting;
 import dev.nkap.agent.scenario.Catalogue;
 import dev.nkap.agent.scenario.ExpectedProposal;
+import dev.nkap.agent.scenario.Hypothesis;
 import dev.nkap.agent.scenario.Outcome;
 import dev.nkap.agent.scenario.ScenarioCase;
+import dev.nkap.agent.scenario.StatementCsv;
 import dev.nkap.agent.scenario.StatementLine;
 import dev.nkap.agent.tools.EvidencePointer;
 import java.io.IOException;
@@ -26,8 +28,8 @@ import java.util.List;
  * <p>A case with no statement line has no import, as in the seed: the manifest says null and the fake gateway
  * has nothing at that path.
  *
- * <p>The statement finding says what the line carries, fee included. The seeded stack's findings do not say it,
- * so this is the part of the fake that the real gateway has not been seen to match.
+ * <p>The statement finding is the real one's: it says what was posted and nothing of the fee. The fee is on the
+ * statement file, which {@code statements/<importId>.csv} holds as the seed would have kept it.
  */
 final class FakeData {
 
@@ -39,6 +41,7 @@ final class FakeData {
     static void write(Path dir) throws IOException {
         Files.createDirectories(dir.resolve("gateway/payments"));
         Files.createDirectories(dir.resolve("gateway/statements/imports"));
+        Files.createDirectories(dir.resolve("statements"));
         ObjectNode manifest = JSON.createObjectNode();
         ArrayNode cases = manifest.putArray("cases");
         ObjectNode script = JSON.createObjectNode();
@@ -55,6 +58,7 @@ final class FakeData {
             } else {
                 entry.put("statementImportId", imp);
                 Files.writeString(dir.resolve("gateway/statements/imports/" + imp), statement(c, imp).toString());
+                Files.writeString(dir.resolve("statements/" + imp + ".csv"), StatementCsv.render(c));
             }
             Files.writeString(dir.resolve("gateway/payments/" + ref), payment(c, ref).toString());
             String right = finalAnswer(c, false);
@@ -106,8 +110,7 @@ final class FakeData {
             f.putNull("paymentReference");
             f.put("detail", "no payment holds " + line.operatorTransactionId() + "; posted " + line.amountMinor() + " "
                     + Catalogue.CURRENCY + ": DR provider:" + Catalogue.PROVIDER + ":float:" + Catalogue.CURRENCY
-                    + " / CR suspense:" + Catalogue.PROVIDER + ":" + Catalogue.CURRENCY
-                    + (line.feeMinor() > 0 ? "; the line carries an operator fee of " + line.feeMinor() + " " + Catalogue.CURRENCY : ""));
+                    + " / CR suspense:" + Catalogue.PROVIDER + ":" + Catalogue.CURRENCY);
         }
         return report;
     }
@@ -126,7 +129,8 @@ final class FakeData {
                     new Posting("fees:" + Catalogue.PROVIDER + ":" + Catalogue.CURRENCY, postings.get(1).amountMinor(), Catalogue.CURRENCY));
         }
         return AnswerSchema.toJson(new ModelAnswer.Final(ModelAnswer.Verdict.PROPOSE, e.hypothesis(), postings,
-                List.of(new EvidencePointer("c2", "/findings/0/detail"), new EvidencePointer("c1", "/provider")),
+                List.of(new EvidencePointer("c3", e.hypothesis() == Hypothesis.UNRECORDED_FEE ? "/lines/0/feeMinor" : "/lines/0/amountMinor"),
+                        new EvidencePointer("c1", "/provider")),
                 "The statement line and the payment show it."));
     }
 }
