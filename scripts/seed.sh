@@ -59,9 +59,8 @@ jq -r '.cases[] | .id as $c | .payments[] | [$c, .label, .amountMinor, .currency
   >"$work/payments.tsv"
 : >"$work/refs.tsv"
 while IFS=$'\t' read -r case_id label amount currency msisdn ending; do
-  payload="$(jq -nc --argjson amount "$amount" --arg currency "$currency" --arg msisdn "$msisdn" --arg label "$label" \
-    '{operation:"COLLECT", amount:$amount, currency:$currency, country:"cm", counterpartyMsisdn:$msisdn,
-      payerMessage:$label, payeeNote:$label}')"
+  payload="$(jq -nc --argjson amount "$amount" --arg currency "$currency" --arg msisdn "$msisdn" --arg note "$label" \
+    -f "$(dirname "${BASH_SOURCE[0]}")/seed-payment.jq")"
   api POST "$GATEWAY/payments" "$agent_key" "$payload" "seed-$case_id-$label"
   case "$status" in 201|202) ;; *) die "POST /payments for $case_id answered $status: $body" ;; esac
   ref="$(jq -r .reference <<<"$body")"
