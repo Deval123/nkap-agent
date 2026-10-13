@@ -311,4 +311,16 @@ class AnswerSchemaTest {
     private static String quote(String s) {
         return s == null ? "null" : JSON.valueToTree(s).toString();
     }
+
+    @Test
+    @DisplayName("toJson writes the eight-field object, and what it writes parses back to the same answer")
+    void roundTrip() throws Exception {
+        for (String json : List.of(callTool("get_payment", UUID), proposal(), noProposal("null", "[]"))) {
+            ModelAnswer answer = parse(json);
+            String written = AnswerSchema.toJson(answer);
+            assertThat(fieldNames(JSON.readTree(written))).containsExactlyInAnyOrder("action", "tool", "argument",
+                    "outcome", "hypothesis", "postings", "evidence", "explanation");
+            assertThat(parse(written)).isEqualTo(answer);
+        }
+    }
 }

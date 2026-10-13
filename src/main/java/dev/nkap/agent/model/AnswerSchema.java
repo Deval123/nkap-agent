@@ -123,6 +123,36 @@ public final class AnswerSchema {
         return node;
     }
 
+    /**
+     * The answer as the eight-field object, the same on every turn. This is what goes back to the model as
+     * its own earlier turn: only the fields the action uses are filled, and what the model wrote in the
+     * others is not kept.
+     */
+    public static String toJson(ModelAnswer answer) {
+        ObjectNode node = F.objectNode();
+        for (String name : List.of("action", "tool", "argument", "outcome", "hypothesis", "postings", "evidence", "explanation")) {
+            node.putNull(name);
+        }
+        if (answer instanceof ModelAnswer.CallTool call) {
+            node.put("action", "call_tool");
+            node.put("tool", call.tool());
+            node.put("argument", call.argument());
+        } else if (answer instanceof ModelAnswer.Final fin) {
+            node.put("action", "final");
+            node.put("outcome", fin.outcome().code());
+            if (fin.hypothesis() != null) {
+                node.put("hypothesis", fin.hypothesis().code());
+            }
+            ArrayNode postings = node.putArray("postings");
+            fin.postings().forEach(p -> postings.addObject().put("account", p.account()).put("amountMinor", p.amountMinor())
+                    .put("currency", p.currency()));
+            ArrayNode evidence = node.putArray("evidence");
+            fin.evidence().forEach(e -> evidence.addObject().put("callId", e.callId()).put("path", e.path()));
+            node.put("explanation", fin.explanation());
+        }
+        return node.toString();
+    }
+
     // --- parsing
 
     private static final Set<String> TOP = Set.of("action", "tool", "argument", "outcome", "hypothesis",
