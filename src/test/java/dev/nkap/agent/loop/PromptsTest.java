@@ -44,6 +44,7 @@ class PromptsTest {
                 forbidden.add(p.msisdn());
                 forbidden.add(p.label());
             });
+            c.lines().forEach(l -> forbidden.add(l.operatorTransactionId()));
         }
         forbidden.add(Catalogue.INJECTION_SENTENCE);
         forbidden.add(Catalogue.PROVIDER);
@@ -86,5 +87,25 @@ class PromptsTest {
         assertThat(system).contains("fees:<provider>:<currency> +X").contains("provider:<provider>:float:<currency> -X");
         assertThat(system).contains("suspense:<provider>:<currency> +X");
         assertThat(system).contains("float_drift").contains("unattributed_movement");
+    }
+
+    @Test
+    @DisplayName("each supported hypothesis says what it looks like in the evidence and that its entry is the correction")
+    void definitionsOfWhatEachLooksLike() {
+        String system = Prompts.system();
+        for (var hypothesis : Catalogue.patterns().keySet()) {
+            String line = system.lines().filter(l -> l.startsWith("- " + hypothesis.code() + ":")).findFirst().orElseThrow();
+            assertThat(line).as(hypothesis.code()).contains("In the evidence:").contains("The entry is the correction");
+        }
+        assertThat(system).contains("a fee that no ledger entry holds").contains("books the fee");
+        assertThat(system).contains("the same amount and the same time").contains("different operator transaction ids")
+                .contains("both were posted to suspense");
+        assertThat(system).contains("It is the reverse of the posting, not a copy of it.");
+    }
+
+    @Test
+    @DisplayName("the system prompt says an argument is the bare UUID, with an example, and never a name and an equals sign")
+    void bareUuid() {
+        assertThat(Prompts.system()).contains("bare UUID").contains("get_payment(\"<uuid>\")").contains("never reference=<uuid>");
     }
 }

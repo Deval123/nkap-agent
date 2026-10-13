@@ -51,8 +51,13 @@ public final class Prompts {
 
     private static String meaning(Hypothesis hypothesis) {
         return switch (hypothesis) {
-            case UNRECORDED_FEE -> "the operator charged a fee that the ledger never recorded.";
-            case DUPLICATE_POSTING -> "the same movement was posted twice.";
+            case UNRECORDED_FEE -> "the operator charged a fee that the ledger never recorded. In the evidence: a statement "
+                    + "line shows a fee that no ledger entry holds. The entry is the correction: it books the fee, and X is the "
+                    + "fee on that line.";
+            case DUPLICATE_POSTING -> "the same movement was posted twice. In the evidence: two statement lines have the same "
+                    + "amount and the same time and different operator transaction ids, and both were posted to suspense. The "
+                    + "entry is the correction: it reverses one of the two postings, and X is that amount. It is the reverse of "
+                    + "the posting, not a copy of it.";
             default -> "";
         };
     }

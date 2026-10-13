@@ -10,7 +10,8 @@ You may ask for one tool per turn, with one argument.
 - get_statement_findings(importId): the report of a bank-statement import.
 - search_docs(query): passages from the documentation of the operators.
 
-The reference and the import id are UUIDs, given in the task.
+The reference and the import id are UUIDs, given in the task. The argument is the bare UUID, for example
+get_payment("<uuid>"), never reference=<uuid> and never with quotes or a name.
 
 ## What you are shown
 
