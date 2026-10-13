@@ -23,3 +23,6 @@ STATE.md
 
 # Written by scripts/seed.sh: the case manifest
 seed-manifest.json
+
+# Written by scripts/model-spike.sh: measurements, never a key
+spike-results/

@@ -4,9 +4,10 @@ An agent that works alongside [Nkap](https://github.com/Deval123/nkap), the open
 money gateway. It lives in its own repository so that nothing of it is merged into the
 gateway and it can be removed without touching Nkap.
 
-**Status: under construction.** There is no model connected yet. This repository currently
-holds the build, the working conventions, the CI, a local demo stack with its seed
-([`docs/demo-stack.md`](docs/demo-stack.md)), and the agent's read-only tools.
+**Status: under construction.** There is no loop yet: a model client exists and has been tested only
+against a local fake. This repository currently holds the build, the working conventions, the CI, a local
+demo stack with its seed ([`docs/demo-stack.md`](docs/demo-stack.md)), the agent's read-only tools, and the
+model behind an interface.
 
 ## What the agent can read
 
@@ -61,6 +62,26 @@ What stands in the way here, and what each depends on:
 Switching webhooks off (`NKAP_WEBHOOKS_ENABLED=false`) stops the background relay but **not** a replay: in
 Nkap, a replay keeps working with webhooks off. So it is not a compensation, and nothing here relies on it.
 If a webhook endpoint is ever registered, or the gateway is published, the protection is gone.
+
+## The model
+
+`dev.nkap.agent.model` puts the model behind `AgentModel.next(messages)`, which returns an answer with its
+token usage, or a failure as a value. The model's answer is one strict JSON schema, the same on every turn:
+an `action` that is either `call_tool` (one of the three tools and an argument) or `final` (an outcome, a
+hypothesis, postings, evidence and an explanation). The model never writes a request to the gateway, and
+evidence is a list of `(callId, path, value)` references, which `Trace.verify` can check; free text there
+is refused by the parser.
+
+The schema is a single object with nullable fields rather than a `oneOf`, because whether the provider's
+strict mode accepts a `oneOf` has not been tried. The parser holds an answer to the rules of its action
+whatever the provider enforces.
+
+`NebiusModel` makes one request per call, with no retry and no redirect, a bounded `max_tokens` and one
+timeout, and reads at most 256 KB. The key is read from `NEBIUS_API_KEY` for each call and held in no field.
+The reasoning text the provider returns is never read. Tests against a fake server check these points.
+**Nothing here has been run against Nebius**: what the model really does with the schema is measured by
+`scripts/model-spike.sh`, which the maintainer runs with the key. `scripts/verify-spike.sh` runs that
+script against a fake.
 
 ## Build
 

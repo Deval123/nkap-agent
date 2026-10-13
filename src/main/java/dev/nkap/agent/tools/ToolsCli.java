@@ -18,7 +18,7 @@ import java.util.List;
  */
 public final class ToolsCli {
 
-    static final List<String> TOOLS = List.of("get_payment", "get_statement_findings", "search_docs");
+    static final List<String> TOOLS = AgentTools.TOOL_NAMES;
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private ToolsCli() {
