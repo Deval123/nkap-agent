@@ -22,7 +22,8 @@ import java.util.function.Supplier;
  * manifest), {@code NKAP_AGENT_TRACES_DIR} (demo/traces), {@code NKAP_AGENT_STATE_DIR} (state),
  * {@code NKAP_AGENT_KEY}[{@code _FILE}], {@code NKAP_APPROVER_KEY}[{@code _FILE}] and {@code NKAP_AGENT_SALT}[{@code _FILE}]
  * (all required), {@code NEBIUS_API_KEY}[{@code _FILE}] (optional), {@code NEBIUS_BASE_URL}, {@code NEBIUS_MODEL},
- * {@code NKAP_AGENT_TRUSTED_PROXY}, {@code NKAP_AGENT_LIVE_DAILY_CAP} (40), {@code NKAP_AGENT_LIVE_COOLDOWN_SECONDS} (300),
+ * {@code NKAP_AGENT_TRUSTED_PROXY}, {@code NKAP_AGENT_INTERNAL_HOST} (the one host the gateway may be reached at over plain
+ * http), {@code NKAP_AGENT_LIVE_DAILY_CAP} (40), {@code NKAP_AGENT_LIVE_COOLDOWN_SECONDS} (300),
  * {@code NKAP_AGENT_SCRIPTED_DAILY_CAP} (200), {@code NKAP_AGENT_SCRIPTED_COOLDOWN_SECONDS} (20).
  */
 public final class WebConfig {
@@ -33,6 +34,7 @@ public final class WebConfig {
     private final int port;
     private final String bind;
     private final String gatewayUrl;
+    private final String internalHost;
     private final Path manifest;
     private final Path statementsDir;
     private final Path tracesDir;
@@ -50,8 +52,14 @@ public final class WebConfig {
         this.env = Map.copyOf(env);
         this.port = integer("NKAP_AGENT_PORT", 8088, 0, 65535);
         this.bind = text("NKAP_AGENT_BIND", "127.0.0.1");
+        String internal = env.get("NKAP_AGENT_INTERNAL_HOST");
+        this.internalHost = internal == null || internal.isBlank() ? null : internal.strip();
+        if (internalHost != null && !internalHost.matches(dev.nkap.agent.approval.AdjustmentProposer.HOST_NAME)) {
+            throw bad("NKAP_AGENT_INTERNAL_HOST");
+        }
         this.gatewayUrl = text("NKAP_GATEWAY_URL", "http://127.0.0.1:8080");
-        if (!gatewayUrl.matches(LOOPBACK_OR_HTTPS)) {
+        if (!gatewayUrl.matches(LOOPBACK_OR_HTTPS)
+                && !(internalHost != null && gatewayUrl.matches("http://" + java.util.regex.Pattern.quote(internalHost) + "(:\\d{1,5})?/?"))) {
             throw bad("NKAP_GATEWAY_URL");
         }
         String manifestValue = env.get("NKAP_AGENT_MANIFEST");
@@ -159,6 +167,14 @@ public final class WebConfig {
 
     public String gatewayUrl() {
         return gatewayUrl;
+    }
+
+    /**
+     * The one host the gateway may be reached at over plain http, for a gateway on a private network that only the
+     * services on it can reach; null if none is named. Set with {@code NKAP_AGENT_INTERNAL_HOST}.
+     */
+    public String internalHost() {
+        return internalHost;
     }
 
     public Path manifest() {

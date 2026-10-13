@@ -117,4 +117,22 @@ class WebConfigTest {
         String text = WebConfig.from(env).toString();
         assertThat(text).doesNotContain("TEST-ONLY");
     }
+
+    @Test
+    @DisplayName("the gateway may be reached over plain http at one host the operator names, for a gateway on a private network; any other host still needs https or loopback")
+    void internalHost() {
+        Map<String, String> env = minimal();
+        env.put("NKAP_GATEWAY_URL", "http://gateway:8080");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> WebConfig.from(env)).hasMessageContaining("NKAP_GATEWAY_URL");
+        env.put("NKAP_AGENT_INTERNAL_HOST", "gateway");
+        WebConfig config = WebConfig.from(env);
+        assertThat(config.gatewayUrl()).isEqualTo("http://gateway:8080");
+        assertThat(config.internalHost()).isEqualTo("gateway");
+        env.put("NKAP_GATEWAY_URL", "http://other:8080");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> WebConfig.from(env)).hasMessageContaining("NKAP_GATEWAY_URL");
+        env.put("NKAP_GATEWAY_URL", "http://gateway:8080");
+        env.put("NKAP_AGENT_INTERNAL_HOST", "Not A Host");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> WebConfig.from(env)).hasMessageContaining("NKAP_AGENT_INTERNAL_HOST");
+        assertThat(WebConfig.from(minimal()).internalHost()).isNull();
+    }
 }

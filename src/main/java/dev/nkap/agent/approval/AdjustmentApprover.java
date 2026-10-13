@@ -23,12 +23,22 @@ public final class AdjustmentApprover {
 
     private final NkapHttp http;
 
+    /** For a gateway on a private network: plain http is accepted for the one host named, and for no other. */
+    public AdjustmentApprover(String baseUrl, Supplier<String> approverKey, String plainHttpHost) {
+        this(baseUrl, approverKey, Duration.ofSeconds(10), plainHttpHost);
+    }
+
     public AdjustmentApprover(String baseUrl, Supplier<String> approverKey) {
         this(baseUrl, approverKey, Duration.ofSeconds(10));
     }
 
     AdjustmentApprover(String baseUrl, Supplier<String> approverKey, Duration timeout) {
-        this.http = new NkapHttp(baseUrl, approverKey, (method, path) -> method.equals("POST") && DECISION.matcher(path).matches(), timeout);
+        this(baseUrl, approverKey, timeout, null);
+    }
+
+    AdjustmentApprover(String baseUrl, Supplier<String> approverKey, Duration timeout, String plainHttpHost) {
+        this.http = new NkapHttp(baseUrl, approverKey, (method, path) -> method.equals("POST") && DECISION.matcher(path).matches(), timeout,
+                plainHttpHost);
     }
 
     NkapHttp.Response send(String method, String path, String body) {
