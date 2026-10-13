@@ -31,4 +31,16 @@ public record ToolResult(String callId, String tool, Map<String, String> argumen
         node.set("fields", fields);
         return node.toString();
     }
+
+    /**
+     * The block a model is shown: the fields, and only the fields, so that a path addresses exactly what is
+     * on the page. The attributes are the harness's own. {@code <}, {@code >} and {@code &} in the body are
+     * written as {@code \u003c}, {@code \u003e} and {@code \u0026}, which are the same JSON value, so no
+     * text a tool returned can write a closing tag.
+     */
+    public String toBlock() {
+        String body = fields.toString().replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e");
+        return "<tool_result call=\"" + callId + "\" tool=\"" + tool + "\" status=\"" + status
+                + "\" trust=\"untrusted\">" + body + "</tool_result>";
+    }
 }

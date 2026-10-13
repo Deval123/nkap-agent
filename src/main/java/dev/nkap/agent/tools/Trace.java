@@ -39,6 +39,27 @@ public final class Trace {
         return results.stream().filter(r -> r.callId().equals(callId)).findFirst();
     }
 
+    /**
+     * The value a pointer addresses in a recorded result, as text, or empty if the call, the path or the value
+     * does not exist. The path is a JSON Pointer into the fields of the result, which are what the model sees.
+     */
+    public synchronized Optional<String> resolve(String callId, String path) {
+        if (callId == null || path == null) {
+            return Optional.empty();
+        }
+        Optional<ToolResult> result = find(callId);
+        if (result.isEmpty()) {
+            return Optional.empty();
+        }
+        JsonNode node;
+        try {
+            node = result.get().fields().at(JsonPointer.compile(path));
+        } catch (IllegalArgumentException notAPointer) {
+            return Optional.empty();
+        }
+        return node.isValueNode() && !node.isNull() ? Optional.of(node.asText()) : Optional.empty();
+    }
+
     public synchronized Verification verify(EvidenceRef ref) {
         if (ref == null || ref.callId() == null || ref.path() == null || ref.value() == null) {
             return Verification.refused("a reference needs a call id, a path and a value");
