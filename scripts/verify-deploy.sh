@@ -78,7 +78,7 @@ expect "the ledger was seeded: there are no adjustment entries yet" "$(psql "sel
 say "Taking the snapshot, then starting the deployment (a fake tunnel, no model key)"
 bash "$root/scripts/reset-demo.sh" --this-is-the-demo-deployment snapshot >"$out/snapshot.log" 2>&1 || { cat "$out/snapshot.log" >&2; die "the snapshot failed"; }
 expect "the snapshot is private" "$(stat -f '%Lp' "$out/seed.dump" 2>/dev/null || stat -c '%a' "$out/seed.dump")" "600"
-dc2 --profile tools stop client >/dev/null 2>&1 || true
+dc2 --profile tools rm -s -f client >/dev/null 2>&1 || true
 dc2 up -d --wait --wait-timeout 300 >"$out/up.log" 2>&1 || { tail -n 30 "$out/up.log" >&2; die "the deployment did not come up"; }
 dc2 ps --format '{{.Service}}: {{.Status}}'
 cid() { dc2 ps -q "$1"; }
@@ -107,6 +107,28 @@ expect "the agent is on both" "$(nets agent)" "edge,internal,"
 expect "the tunnel is on edge only" "$(nets tunnel)" "edge,"
 expect "internal is an internal network" "$(docker network inspect -f '{{.Internal}}' "${PROJECT}_internal")" "true"
 expect "edge is not" "$(docker network inspect -f '{{.Internal}}' "${PROJECT}_edge")" "false"
+
+say "The compensation for plain http on internal: who is on it, and what they can hold"
+# The agent reaches the gateway over plain http, so its keys cross internal in clear text. What makes that acceptable (deploy/RUNBOOK.md) is that
+# nothing else is on the network and nothing on it can sniff. The list is read from Docker, and the capabilities from each running container.
+on_internal="$(docker ps --filter "network=${PROJECT}_internal" --format '{{.Label "com.docker.compose.project"}}/{{.Label "com.docker.compose.service"}}' | sort | tr '\n' ' ')"
+expect "only the expected containers are on internal, with the client profile off" "$on_internal" "${PROJECT}/agent ${PROJECT}/db ${PROJECT}/gateway ${PROJECT}/simulator "
+expect "Docker lists four endpoints on internal, no stopped or foreign one" "$(docker network inspect -f '{{len .Containers}}' "${PROJECT}_internal")" "4"
+expect "no client container exists" "$(docker ps -a -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=client" | wc -l | tr -d ' ')" "0"
+# The capability masks of every process in a container (effective and bounding), as hex words, one per line.
+cap_words() { sed -E -n 's/^Cap(Eff|Bnd):[[:space:]]*//p'; }
+caps_of() { docker exec "$1" sh -c 'cat /proc/[0-9]*/status 2>/dev/null' | cap_words; }
+# NET_RAW is bit 13 and NET_ADMIN bit 12.
+sniffs() { local h; for h in $(cat); do if (( ((0x$h >> 13) & 1) || ((0x$h >> 12) & 1) )); then echo yes; return; fi; done; echo no; }
+raw_control="$(docker run --rm --network none --entrypoint sh "$(grep -h -o -E 'curlimages/curl:[0-9.]+@sha256:[0-9a-f]{64}' "$root/deploy/compose.demo.yaml" | head -n 1)" -c 'cat /proc/[0-9]*/status' | cap_words | sniffs)"
+expect "control: a container with Docker's default capabilities is seen to hold NET_RAW" "$raw_control" "yes"
+for service in db simulator gateway agent; do
+  expect "$service holds neither NET_RAW nor NET_ADMIN, in any process, effective or bounding" "$(caps_of "$(cid $service)" | sniffs)" "no"
+done
+expect "the database's bounding set is the five capabilities its entrypoint needs and nothing else" "$(caps_of "$(cid db)" | sort -u | grep -v '^0*$' | tr '\n' ' ')" "00000000000000cb "
+for service in simulator gateway agent; do
+  expect "$service has an empty bounding set: no capability at all" "$(docker exec "$(cid $service)" sh -c 'grep CapBnd /proc/1/status' | awk '{print $2}')" "0000000000000000"
+done
 
 say "The gateway is not reachable from edge; internal has no way out (each against a control)"
 curl_image="$(grep -h -o -E 'curlimages/curl:[0-9.]+@sha256:[0-9a-f]{64}' "$root/deploy/compose.demo.yaml" | head -n 1)"
