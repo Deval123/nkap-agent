@@ -1,0 +1,6 @@
+# The build context for deploy/Dockerfile is the repository, and almost none of it belongs in an image:
+# no results, no keys, no state, no history. Everything is excluded, then what the image needs is let back in.
+*
+!pom.xml
+!src
+!demo/traces
