@@ -317,7 +317,7 @@ class AgentServiceTest {
     }
 
     @Test
-    @DisplayName("self-approve uses the agent's own key and is refused by Nkap, with a fixed text and not the server's words; nothing is written")
+    @DisplayName("self-approve uses the agent's own key and is refused by Nkap, with a fixed text and not the server's words; nothing is written, and the run stays open")
     void selfApprove() throws Exception {
         start();
         String runId = h.run("self-approval", "scripted").json().get("runId").asText();
@@ -328,9 +328,65 @@ class AgentServiceTest {
         assertThat(decision.get("result").asText()).isEqualTo("refused");
         assertThat(decision.get("code").asText()).isEqualTo("adjustment-self-approval");
         assertThat(decision.get("text").asText()).contains("different key");
+        assertThat(decision.get("attemptsLeft").asInt()).isEqualTo(2);
         assertThat(reply.body()).doesNotContain("SERVER-DETAIL");
         assertThat(h.ledgerEntries).hasValue(0);
-        assertThat(h.post("/api/runs/" + runId + "/approve", "{}").status()).isEqualTo(409);
+        ServiceHarness.Reply approved = h.post("/api/runs/" + runId + "/approve", "{}");
+        assertThat(approved.status()).as("a refusal did not use up the decision").isEqualTo(200);
+        assertThat(approved.json().get("result").asText()).isEqualTo("decided");
+        assertThat(h.ledgerEntries).hasValue(1);
+        assertThat(h.post("/api/runs/" + runId + "/approve", "{}").status()).as("now it is closed").isEqualTo(409);
+        assertThat(h.post("/api/runs/" + runId + "/self-approve", "{}").status()).isEqualTo(409);
+    }
+
+    @Test
+    @DisplayName("a run allows three attempts that Nkap refused; after that every decision on it is 429 with a fixed text, and Nkap is not asked")
+    void threeAttempts() throws Exception {
+        start();
+        String runId = h.run("self-approval", "scripted").json().get("runId").asText();
+        for (int left = 2; left >= 0; left--) {
+            JsonNode refused = h.post("/api/runs/" + runId + "/self-approve", "{}").json();
+            assertThat(refused.get("result").asText()).isEqualTo("refused");
+            assertThat(refused.get("attemptsLeft").asInt()).isEqualTo(left);
+        }
+        int posts = h.decisionPosts.size();
+        ServiceHarness.Reply fourth = h.post("/api/runs/" + runId + "/self-approve", "{}");
+        assertThat(fourth.status()).isEqualTo(429);
+        assertThat(fourth.json().get("error").asText()).isEqualTo("too-many-attempts");
+        assertThat(fourth.json().get("text").asText()).isNotBlank();
+        assertThat(h.post("/api/runs/" + runId + "/approve", "{}").status()).isEqualTo(429);
+        assertThat(h.decisionPosts).as("nothing more reached Nkap").hasSize(posts);
+        assertThat(h.ledgerEntries).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("several requests at once on one run: exactly one reaches Nkap as a decision, the others are 409, and one ledger entry is written")
+    void concurrentDecisionsOnOneRun() throws Exception {
+        start();
+        String runId = h.run("unrecorded-fee", "scripted").json().get("runId").asText();
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        try {
+            List<Future<ServiceHarness.Reply>> replies = new ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                replies.add(pool.submit(() -> h.post("/api/runs/" + runId + "/approve", "{}")));
+            }
+            int decided = 0;
+            int conflicts = 0;
+            for (Future<ServiceHarness.Reply> f : replies) {
+                ServiceHarness.Reply r = f.get(30, TimeUnit.SECONDS);
+                if (r.status() == 200 && r.json().get("result").asText().equals("decided")) {
+                    decided++;
+                } else if (r.status() == 409) {
+                    conflicts++;
+                }
+            }
+            assertThat(decided).isEqualTo(1);
+            assertThat(conflicts).isEqualTo(7);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(h.decisionPosts).hasSize(1);
+        assertThat(h.ledgerEntries).hasValue(1);
     }
 
     @Test

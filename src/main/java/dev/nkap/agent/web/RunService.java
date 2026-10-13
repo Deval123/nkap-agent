@@ -31,6 +31,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -48,12 +49,19 @@ final class RunService {
     /** What a run id maps to. */
     private static final class Pending {
         final UUID adjustmentId;
+        final String paymentReference;
+        /** Closed only by a decision Nkap took. Changed only with the decision lock held. */
         boolean decided;
+        /** Attempts that reached Nkap. Changed only with the decision lock held. */
+        int attempts;
 
-        Pending(UUID adjustmentId) {
+        Pending(UUID adjustmentId, String paymentReference) {
             this.adjustmentId = adjustmentId;
+            this.paymentReference = paymentReference;
         }
     }
+
+
 
     /** A request that was refused, as a status, a code and a fixed text. */
     record Refusal(int status, String code, String text, long retryAfterSeconds) {
@@ -72,6 +80,9 @@ final class RunService {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MAX_AT_ONCE = 2;
+    /** Attempts on one run that Nkap refused, after which the run takes no more. */
+    static final int MAX_ATTEMPTS = 3;
+    static final String TOO_MANY_TEXT = "This run has used its three attempts.";
 
     private final WebConfig config;
     private final Supplier<AgentModel> liveModel;
@@ -80,6 +91,11 @@ final class RunService {
     private final Clock clock;
     private final RunTable<Pending> runs;
     private final Semaphore running = new Semaphore(MAX_AT_ONCE);
+    /**
+     * Held around every attempt to decide: two requests on one run cannot both reach Nkap as a decision. It is held for
+     * one call to Nkap at most (10 seconds).
+     */
+    private final ReentrantLock decisions = new ReentrantLock();
     private final GatewayClient gateway;
     private final AdjustmentProposer proposer;
 
@@ -168,7 +184,7 @@ final class RunService {
             ProposalResult result = proposer.propose(proposed.proposal());
             if (result instanceof ProposalResult.Created created) {
                 proposal.put("status", "created");
-                body.put("runId", runs.put(new Pending(created.id())));
+                body.put("runId", runs.put(new Pending(created.id(), reference)));
             } else {
                 ProposalResult.Refused refused = (ProposalResult.Refused) result;
                 proposal.put("status", "refused").put("code", refused.code()).put("text", refused.text());
@@ -179,29 +195,41 @@ final class RunService {
         return body;
     }
 
-    /** One decision per run. {@code self} tries it with the agent's own key, which Nkap is expected to refuse. */
+    /**
+     * An attempt to decide a run. Only a decision Nkap took closes the run; a refusal leaves it open, counted, up to
+     * {@link #MAX_ATTEMPTS}.
+     * {@code self} tries it with the agent's own key, which Nkap is expected to refuse.
+     */
     Result decide(String runId, boolean self) {
         java.util.Optional<Pending> found = runs.get(runId);
         if (found.isEmpty()) {
             return Result.refused(404, "not-found", "Not found.");
         }
         Pending pending = found.get();
-        synchronized (pending) {
+        decisions.lock();
+        try {
             if (pending.decided) {
                 return Result.refused(409, "already-decided", "This run has had its decision.");
             }
-            pending.decided = true;
+            if (pending.attempts >= MAX_ATTEMPTS) {
+                return Result.refused(429, "too-many-attempts", TOO_MANY_TEXT);
+            }
+            pending.attempts++;
+            AdjustmentApprover approver = new AdjustmentApprover(config.gatewayUrl(), self ? config.agentKey() : config.approverKey());
+            DecisionResult result = approver.approve(pending.adjustmentId);
+            ObjectNode body = JSON.createObjectNode();
+            body.put("decision", self ? "self-approve" : "approve");
+            if (result instanceof DecisionResult.Decided decided) {
+                pending.decided = true;
+                body.put("result", "decided").put("ledgerEntryId", decided.ledgerEntryId());
+            } else {
+                DecisionResult.Refused refused = (DecisionResult.Refused) result;
+                body.put("result", "refused").put("code", refused.code()).put("text", refused.text());
+                body.put("attemptsLeft", MAX_ATTEMPTS - pending.attempts);
+            }
+            return Result.ok(body);
+        } finally {
+            decisions.unlock();
         }
-        AdjustmentApprover approver = new AdjustmentApprover(config.gatewayUrl(), self ? config.agentKey() : config.approverKey());
-        DecisionResult result = approver.approve(pending.adjustmentId);
-        ObjectNode body = JSON.createObjectNode();
-        body.put("decision", self ? "self-approve" : "approve");
-        if (result instanceof DecisionResult.Decided decided) {
-            body.put("result", "decided").put("ledgerEntryId", decided.ledgerEntryId());
-        } else {
-            DecisionResult.Refused refused = (DecisionResult.Refused) result;
-            body.put("result", "refused").put("code", refused.code()).put("text", refused.text());
-        }
-        return Result.ok(body);
     }
 }

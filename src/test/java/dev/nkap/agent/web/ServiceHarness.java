@@ -55,6 +55,9 @@ final class ServiceHarness implements AutoCloseable {
     final Map<String, String> proposedBy = new ConcurrentHashMap<>();
     final Map<String, Boolean> decided = new ConcurrentHashMap<>();
     final java.util.List<String> proposalBodies = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** The bearer of every approve or reject POST that reached the fake Nkap, in order. */
+    final java.util.List<String> decisionPosts = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
     ServiceHarness(Path dir, Consumer<Map<String, String>> tweak, Supplier<AgentModel> liveModel, Clock clock) throws Exception {
@@ -100,6 +103,7 @@ final class ServiceHarness implements AutoCloseable {
         }
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("/adjustments/([0-9a-f-]{36})/(approve|reject)").matcher(path);
         if (r.method().equals("POST") && m.matches()) {
+            decisionPosts.add(bearer);
             String id = m.group(1);
             if (!proposedBy.containsKey(id)) {
                 return new FakeNkap.Answer(404, problem("adjustment-not-found"));
