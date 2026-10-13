@@ -129,22 +129,25 @@ Every image reference in `deploy/` carries a digest, and a test fails if one doe
 | `eclipse-temurin:21.0.5_11-jre-alpine` | `deploy/Dockerfile` (run stage) | tag and digest | pinned |
 | `postgres:16.6-alpine` | `deploy/compose.demo.yaml` | tag and digest | pinned |
 | `curlimages/curl:8.11.1` | `deploy/compose.demo.yaml`, `deploy/verify/` | tag and digest | pinned |
-| `cloudflare/cloudflared` | `deploy/compose.demo.yaml` | version and digest | **a placeholder: you fill it in** |
+| `cloudflare/cloudflared:2026.9.1` | `deploy/compose.demo.yaml` | version and digest | pinned |
 | the gateway and the simulator | built from the Nkap commit in `compose.yaml` | the commit | their base images are pinned by tag in Nkap's own Dockerfiles, not by digest; pinning them by digest is a change in Nkap |
 
-**The tunnel image.** The digest in the file is all zeros, and `scripts/verify-deploy.sh` fails while it is. Choose a release of
-`cloudflared` on its releases page on `github.com/cloudflare/cloudflared`, then:
+**The tunnel image** is `cloudflare/cloudflared:2026.9.1`, pinned by that version and by its digest in `deploy/compose.demo.yaml`. The maintainer checked,
+on his own machine, that this release lists `--token-file` in `tunnel run --help`; that is how the token reaches `cloudflared` from a file instead of an
+argument or an environment value. This repository did not fetch the image or contact Cloudflare, so the digest is the maintainer's, and the check is
+yours to repeat once you have the image: `docker run --rm cloudflare/cloudflared:2026.9.1 tunnel run --help` must list `--token-file`. The image is
+distroless, so there is no shell to read the file into a variable instead, and the token must never be put on the command line. The file's owner is the
+user the image runs as (`docker image inspect --format '{{.Config.User}}' cloudflare/cloudflared:2026.9.1`).
+
+**Refreshing it.** Choose a release of `cloudflared` on its releases page on `github.com/cloudflare/cloudflared`, then:
 
 ```bash
 docker pull cloudflare/cloudflared:<version>
 docker image inspect --format '{{index .RepoDigests 0}}' cloudflare/cloudflared:<version>
 ```
 
-Put the version and that digest in `deploy/compose.demo.yaml`. **The pinned version must have `tunnel run --token-file`**, which is how the
-token reaches `cloudflared` from a file instead of an argument or an environment value. Check it: `docker run --rm
-cloudflare/cloudflared:<version> tunnel run --help` must list `--token-file`. If it does not, choose a newer release. The image is
-distroless, so there is no shell to read the file into a variable instead, and the token must not be put on the command line.
-The file's owner is the user the image runs as (`docker image inspect --format '{{.Config.User}}' cloudflare/cloudflared:<version>`).
+Put the version and that digest in `deploy/compose.demo.yaml` (and in the table above), and confirm that the new version still lists `--token-file`
+in `tunnel run --help`; if it does not, do not use it.
 
 **Refreshing the others.** Choose the new tag, then get its digest from the registry and replace it in the file:
 `docker buildx imagetools inspect <image>:<tag> --format '{{.Manifest.Digest}}'`. Rebuild and run `scripts/verify-deploy.sh`.
@@ -155,7 +158,7 @@ The file's owner is the user the image runs as (`docker image inspect --format '
 
 - The secret files can be read by the containers, with the owners in step 3: `docker compose ... exec agent sh -c 'cat /run/secrets/agent_key > /dev/null'`
   must succeed, and the same for the tunnel's token file with the tunnel container. (A desktop mounts files in a way that hides a wrong owner.)
-- The pinned `cloudflared` accepts `--token-file` (step 7), and the tunnel shows healthy in the dashboard.
+- The pinned `cloudflared` lists `--token-file` in `tunnel run --help` (the maintainer saw it; repeat it, section 7), and the tunnel shows healthy in the dashboard.
 - The public hostname shows the page, from outside your network, and `POST /api/runs` is refused after the rate-limit rule's threshold.
 - **The firewall denies all inbound:** scan the VPS's public address from another machine; every port must be closed or filtered.
 - **SSH refuses a password:** `ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no <host>` must be refused.

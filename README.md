@@ -387,7 +387,7 @@ live runs off unless the operator turns them on. `deploy/` holds the `Dockerfile
 the tunnel, no published port, read-only containers with no capability, secrets as files) and `compose.live.yaml` (adds the model key and turns live
 on; leaving it out is the kill switch). `scripts/reset-demo.sh` restores the demo ledger to its seeded state, and `scripts/verify-deploy.sh` checks the
 structure locally with a fake tunnel in place of `cloudflared`. The runbook lists what only the operator can check on the VPS and in Cloudflare.
-The tunnel image's digest is a marked placeholder that the operator fills in, and `scripts/verify-deploy.sh` fails until it is.
+The tunnel image is pinned to `cloudflare/cloudflared:2026.9.1` and its digest; `scripts/verify-deploy.sh` fails if any digest in `deploy/` is a placeholder.
 
 ## Build
 

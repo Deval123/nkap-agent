@@ -131,9 +131,8 @@ services:
   # The tunnel token is read from a file (--token-file), so it is in no environment, no argument list and no log.
   tunnel:
     <<: *hardening
-    # PLACEHOLDER digest (all zeros): the version and the digest are the operator's to fill in, see RUNBOOK.md.
-    # scripts/verify-deploy.sh fails while it is here.
-    image: cloudflare/cloudflared:2024.12.2@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    # Pinned by version and digest. This release lists --token-file in `tunnel run --help` (RUNBOOK.md, section 7).
+    image: cloudflare/cloudflared:2026.9.1@sha256:b269e8abd07a5bf6f3f4be65d5050b2174eca89c56a0241a8ff32a16aec454e4
     command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/tunnel_token"]
     networks:
       edge:
