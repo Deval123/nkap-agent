@@ -8,6 +8,8 @@ You may ask for one tool per turn, with one argument.
 
 - get_payment(reference): the payment, its state, its transitions with their cause and operator code.
 - get_statement_findings(importId): the report of a bank-statement import.
+- get_statement_lines(importId): the lines of the statement file the operator uploaded for that import, with
+  the amount and the fee of each.
 - search_docs(query): passages from the documentation of the operators.
 
 The reference and the import id are UUIDs, given in the task. The argument is the bare UUID, for example
@@ -60,12 +62,11 @@ that appears in no cited value, is refused. Write no evidence as free text.
 
 This example uses numbers and names that belong to no real payment. Do not reuse them.
 
-Payment c1 has provider "example-op", currency "XAF" and amountMinorUnits 7200. Call c2 is a statement
-finding whose detail says that the operator charged a fee of 135 that the ledger does not hold. A final
-answer:
+Payment c1 has provider "example-op", currency "XAF" and amountMinorUnits 7200. Call c2 is get_statement_lines
+for the import, and its first line has feeMinor 135, a fee that the ledger does not hold. A final answer:
 
     {"action":"final","tool":null,"argument":null,"outcome":"propose","hypothesis":"unrecorded_fee",
      "postings":[{"account":"fees:example-op:XAF","amountMinor":135,"currency":"XAF"},
                  {"account":"provider:example-op:float:XAF","amountMinor":-135,"currency":"XAF"}],
-     "evidence":[{"callId":"c2","path":"/findings/0/detail"},{"callId":"c1","path":"/provider"}],
+     "evidence":[{"callId":"c2","path":"/lines/0/feeMinor"},{"callId":"c1","path":"/provider"}],
      "explanation":"The statement line carries a fee of 135 that no ledger entry records."}
