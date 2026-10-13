@@ -52,8 +52,11 @@ whatever process holds it.
 What stands in the way here, and what each depends on:
 
 - the gateway publishes no port in `compose.yaml` (`scripts/verify-seed.sh` checks it);
-- the demo registers no webhook endpoint, so a replay finds nowhere to send (`scripts/verify-tools.sh`
-  checks that none exists, and that a replay is refused for that reason when an event exists).
+- the demo registers no webhook endpoint, so a replay would find nowhere to send. `scripts/verify-tools.sh`
+  checks that none exists. It also finds the outbox empty (no endpoint, so no event is queued), which
+  means the refusal a replay of a real event would get for want of an endpoint (`no-webhook-endpoint`,
+  read in Nkap's code) was **not** exercised; what it does show is that the agent's key reaches the replay
+  route (an unknown event is a `404`) and the approver's key does not (`403`).
 
 Switching webhooks off (`NKAP_WEBHOOKS_ENABLED=false`) stops the background relay but **not** a replay: in
 Nkap, a replay keeps working with webhooks off. So it is not a compensation, and nothing here relies on it.
