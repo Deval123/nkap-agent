@@ -44,7 +44,7 @@ cases="$out/files/cases.json"
 
 say "The manifest and the keys file"
 expect "the manifest holds six cases" "$(jq '.cases | length' "$manifest")" "6"
-expect "the keys file has mode 600" "$(stat -f '%Lp' "$out/seed-keys.env" 2>/dev/null || stat -c '%a' "$out/seed-keys.env")" "600"
+expect "the keys file has mode 600" "$(stat -c '%a' "$out/seed-keys.env" 2>/dev/null || stat -f '%Lp' "$out/seed-keys.env")" "600"
 expect "the manifest holds no key" "$(grep -c -F -e "$agent_key" -e "$approver_key" "$manifest" || true)" "0"
 expect "the seed's output holds no key" "$(grep -c -F -e "$agent_key" -e "$approver_key" "$out/seed.log" || true)" "0"
 

@@ -90,7 +90,7 @@ leftovers="$(cat "$work/out" "$work/err" "$work/results"/* "$work/curl-args.log"
 expect "the key is in no output, no result file and no curl argument" "$(grep -c "$FAKE_KEY" <<<"$leftovers" || true)" "0"
 expect "the reasoning text is in no output and no result file" "$(grep -c "$REASONING" <<<"$leftovers" || true)" "0"
 expect "curl was told to read its config from standard input" "$(grep -c -- '-K -' "$work/curl-args.log" | awk '{print ($1 > 0)}')" "1"
-expect "the results file is private" "$(stat -f '%Lp' "$work/results"/*.jsonl 2>/dev/null || stat -c '%a' "$work/results"/*.jsonl)" "600"
+expect "the results file is private" "$(stat -c '%a' "$work/results"/*.jsonl 2>/dev/null || stat -f '%Lp' "$work/results"/*.jsonl)" "600"
 
 say "The cap holds"
 : >"$work/requests.log"

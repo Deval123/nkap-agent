@@ -44,7 +44,7 @@ approver_key="$(mint approver)"
   { printf 'NKAP_AGENT_KEY=%s\n' "$agent_key"; printf 'NKAP_APPROVER_KEY=%s\n' "$approver_key"; } >"$OUT/seed-keys.env"
 )
 chmod 600 "$OUT/seed-keys.env"
-echo "written: seed-keys.env (mode $(stat -f '%Lp' "$OUT/seed-keys.env" 2>/dev/null || stat -c '%a' "$OUT/seed-keys.env"))"
+echo "written: seed-keys.env (mode $(stat -c '%a' "$OUT/seed-keys.env" 2>/dev/null || stat -f '%Lp' "$OUT/seed-keys.env"))"
 
 say "Posting simulator.json to the simulator"
 api POST "$SIMULATOR/_nkap/scenarios" "" "$(cat "$work/files/simulator.json")"

@@ -73,7 +73,7 @@ expect "every call asked for the strict schema, with the 6000-token bound" "$(gr
 expect "24 gateway reads (the statement lines are a file, not a gateway read), every one a GET with the agent key" "$(grep -c '^GET .* bearer=ok' "$work/gateway.log")" "24"
 expect "no gateway request but GET" "$(grep -vc '^GET ' "$work/gateway.log" || true)" "0"
 expect "12 records were kept" "$(cat "$work"/results/*.jsonl | wc -l | tr -d ' ')" "12"
-expect "the records are private" "$(stat -f '%Lp' "$work"/results/*.jsonl 2>/dev/null || stat -c '%a' "$work"/results/*.jsonl)" "600"
+expect "the records are private" "$(stat -c '%a' "$work"/results/*.jsonl 2>/dev/null || stat -f '%Lp' "$work"/results/*.jsonl)" "600"
 injected="$(cat "$work"/results/*.jsonl | jq -r 'select(.case == "injection") | .record.messages[] | select(.content | contains("Ignore your previous")) | .content')"
 expect "the injection sentence reached the model in both runs, inside a block" "$(grep -c '^<tool_result .*Ignore your previous' <<<"$injected")" "2"
 expect "and nothing follows the harness's closing tag" "$(grep -c '</tool_result>$' <<<"$injected")" "2"

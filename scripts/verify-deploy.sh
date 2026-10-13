@@ -77,7 +77,7 @@ expect "the ledger was seeded: there are no adjustment entries yet" "$(psql "sel
 
 say "Taking the snapshot, then starting the deployment (a fake tunnel, no model key)"
 bash "$root/scripts/reset-demo.sh" --this-is-the-demo-deployment snapshot >"$out/snapshot.log" 2>&1 || { cat "$out/snapshot.log" >&2; die "the snapshot failed"; }
-expect "the snapshot is private" "$(stat -f '%Lp' "$out/seed.dump" 2>/dev/null || stat -c '%a' "$out/seed.dump")" "600"
+expect "the snapshot is private" "$(stat -c '%a' "$out/seed.dump" 2>/dev/null || stat -f '%Lp' "$out/seed.dump")" "600"
 dc2 --profile tools rm -s -f client >/dev/null 2>&1 || true
 dc2 up -d --wait --wait-timeout 300 >"$out/up.log" 2>&1 || { tail -n 30 "$out/up.log" >&2; die "the deployment did not come up"; }
 dc2 ps --format '{{.Service}}: {{.Status}}'
