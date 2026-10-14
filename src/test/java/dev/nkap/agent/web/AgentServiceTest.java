@@ -191,7 +191,7 @@ class AgentServiceTest {
     // --- the headers
 
     @Test
-    @DisplayName("every response, an error too, has the security headers; /api/* is also no-store")
+    @DisplayName("every response, the page, its script and its style and an error too, has the security headers and is no-store")
     void headers() throws Exception {
         start();
         List<ServiceHarness.Reply> replies = List.of(h.get("/"), h.get("/app.js"), h.get("/app.css"), h.get("/api/status"), h.get("/api/recordings"),
@@ -202,10 +202,9 @@ class AgentServiceTest {
             assertThat(r.header("x-content-type-options")).isEqualTo("nosniff");
             assertThat(r.header("referrer-policy")).isEqualTo("no-referrer");
         }
-        for (ServiceHarness.Reply r : replies.subList(3, replies.size()).stream().filter(x -> x != replies.get(6)).toList()) {
-            assertThat(r.header("cache-control")).isEqualTo("no-store");
+        for (ServiceHarness.Reply r : replies) {
+            assertThat(r.header("cache-control")).as("%s: an edge cache must never keep a page, a script or a style", r.status()).isEqualTo("no-store");
         }
-        assertThat(replies.get(6).header("cache-control")).as("an unknown route is no-store too, as it may be an API route that failed").isNotNull();
     }
 
     // --- limits

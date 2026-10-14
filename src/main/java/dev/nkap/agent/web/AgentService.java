@@ -225,9 +225,7 @@ public final class AgentService implements AutoCloseable {
         headers.set("Content-Security-Policy", CSP);
         headers.set("X-Content-Type-Options", "nosniff");
         headers.set("Referrer-Policy", "no-referrer");
-        if (shape.startsWith("/api/") || shape.equals("unknown") || reply.status() >= 400) {
-            headers.set("Cache-Control", "no-store");
-        }
+        headers.set("Cache-Control", "no-store");
         headers.set("Content-Type", reply.contentType());
         reply.headers().forEach(headers::set);
         byte[] body = reply.body();

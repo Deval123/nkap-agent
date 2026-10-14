@@ -71,8 +71,9 @@ expect "the content security policy is the one that allows only this service" "$
   "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 expect "nosniff" "$(header x-content-type-options)" "nosniff"
 expect "no referrer" "$(header referrer-policy)" "no-referrer"
-call GET /app.js; expect "GET /app.js is 200" "$status" "200"
-call GET /app.css; expect "GET /app.css is 200" "$status" "200"
+expect "the page is no-store, so an edge cache never keeps it" "$(header cache-control)" "no-store"
+call GET /app.js; expect "GET /app.js is 200, and no-store" "$status $(header cache-control)" "200 no-store"
+call GET /app.css; expect "GET /app.css is 200, and no-store" "$status $(header cache-control)" "200 no-store"
 call GET /api/status
 expect "the status is 200, and no-store" "$status $(header cache-control)" "200 no-store"
 expect "live is off: there is no model key" "$(jq -r '.liveEnabled' <<<"$body")" "false"
