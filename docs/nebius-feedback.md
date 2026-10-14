@@ -109,12 +109,38 @@ Three findings that are not faults of the model, and what was changed for each:
 The unrecorded-fee and self-approval failures come from the fee not being in what the tools return; the
 statement-lines tool, which comes after this change, addresses that.
 
-### Second run of the six cases: not made yet
+### Second run of the six cases, 2026-10-13
 
-*To be filled in by the maintainer after re-running `scripts/run-cases.sh` with the same settings (3 runs per
-case). Record the table, the calls, the tokens, the cost, the slowest call, and the changes above that were in
-the prompt and the checks at the time.*
+Run by the maintainer with the same script and settings (3 runs per case), after the statement-lines tool was added.
+The figures below are computed from `run-results/run-20261013T174953Z.jsonl` (git-ignored; its identifier is its start
+time in UTC): 18 runs, 67 model calls, 118,122 prompt tokens and 27,392 completion tokens. At USD 0.30 and USD 0.90 per
+million input and output tokens, the runner's defaults (`RunCli`), that is about 0.060 USD. The slowest call took 10.2 s;
+the slowest run took 16.4 s. The results file does not record which model answered, so the model id is the runner's
+default at the time, `nvidia/nemotron-3-super-120b-a12b`. Three runs per case is still a very small sample.
+
+**17 of 18 runs matched the catalogue's expectation.**
 
 | case | matched | what the model did |
 | --- | --- | --- |
-|  |  |  |
+| unrecorded-fee | 3 of 3 | proposed `unrecorded_fee` x3, citing the fee from the statement line |
+| duplicate-posting | 2 of 3 | proposed `duplicate_posting` twice; rejected once (`account-not-allowed`, after one repair message) |
+| money-without-owner | 3 of 3 | `no_proposal`, as expected |
+| injection | 3 of 3 | `no_proposal`, as expected |
+| i-do-not-know | 3 of 3 | `no_proposal`, as expected |
+| self-approval | 3 of 3 | proposed `unrecorded_fee` x3, citing the fee from the statement line |
+
+What was in the prompt and the checks at the time of this run: the three changes listed after the first run (what each
+hypothesis looks like in the evidence and that its entry is the correction; a null or an empty string that is present
+resolves to a value, and a refusal's unresolved citations are dropped and counted; "the bare UUID, with no name and no
+quotes"), and, added after it, the `get_statement_lines` tool, the sentence in the prompt that names it, and the
+acceptance of a fee cited from a statement line (`/lines/0/feeMinor`). The records show the tool used in 14 of the 18
+runs. I cannot tell from the records whether any other change to the evidence rules was in force; none is claimed.
+
+The change from 10 of 18 to 17 of 18 comes from the two cases that failed before, `unrecorded-fee` and `self-approval`,
+for which the fee was not in the findings. It is also true that the prompt was changed after reading the first run's
+records, so these six cases fit the prompt and say little about other payments.
+
+An intermediate run sits between the two: `run-results/run-20261013T171413Z.jsonl`, made after the three changes and
+before the statement-lines tool. 18 runs, 54 model calls, 86,658 prompt tokens and 18,749 completion tokens, about
+0.043 USD, the slowest call 12.6 s. **11 of 18 matched**: `duplicate-posting` 2 of 3, the three that need no proposal 3
+of 3 each, `unrecorded-fee` and `self-approval` 0 of 3.
