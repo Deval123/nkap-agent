@@ -4,11 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nkap Agent</title>
+<meta name="description" content="An agent looks into a mobile-money payment that does not match the ledger and may only propose the fix. A different key has to approve, or Nkap refuses.">
+<meta name="theme-color" content="#0E2B25">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+<header class="top">
+<h1>Nkap Agent</h1>
+<p class="lede">An agent that looks into a mobile-money payment and proposes a ledger adjustment. It proposes with one key; a different key has to approve, or Nkap refuses.</p>
+</header>
 <main id="app">
-<noscript><p>This page needs JavaScript to show a run.</p></noscript>
+<noscript><p class="noscript">This page needs JavaScript to show a run.</p></noscript>
+<div class="side">
+<section id="controls" class="controls" aria-labelledby="controls-title">
+<h2 id="controls-title">Run a case</h2>
+<div class="field">
+<label for="case">Case</label>
+<select id="case"></select>
+</div>
+<fieldset class="mode" aria-describedby="mode-help">
+<legend>Mode</legend>
+<label class="segment"><input type="radio" name="mode" value="scripted" checked><span>Scripted answers</span></label>
+<label class="segment"><input type="radio" name="mode" value="live"><span>Live model</span></label>
+</fieldset>
+<p id="mode-help" class="help"></p>
+<button id="run" class="primary" type="button">Run</button>
+<p id="status" class="help"></p>
+</section>
+<section id="past" class="past" aria-labelledby="past-title">
+<h2 id="past-title">Past runs</h2>
+<p class="help">Watch a recording. A file of a past run is played back, and nothing runs.</p>
+<div id="recordings" class="recordings"></div>
+</section>
+</div>
+<section id="slip" class="slip" tabindex="-1" aria-labelledby="slip-title">
+<h2 id="slip-title" tabindex="-1">Run slip</h2>
+<div id="working"></div>
+<div id="trace"></div>
+<div id="signatures" class="signatures" hidden></div>
+<div id="decision"></div>
+</section>
 </main>
 <script src="/app.js"></script>
 </body>
