@@ -184,4 +184,62 @@ class PageTest {
                 .doesNotContain("autofocus");
         assertThat(html).containsPattern("<select id=\"case\"");
     }
+
+    @Test
+    @DisplayName("the mode segments show their focus ring on the visible segment, since the radio input itself is transparent")
+    void segmentFocusRing() throws IOException {
+        String css = read("app.css");
+        assertThat(css).containsPattern("\\.segment input\\s*\\{[^}]*opacity:\\s*0");
+        assertThat(css).containsPattern("\\.segment input:focus-visible \\+ span\\s*\\{[^}]*outline:\\s*3px solid[^}]*outline-offset:\\s*3px");
+    }
+
+    @Test
+    @DisplayName("before any run the slip prints the two signature lines empty with their sentence, as a preview that holds no button, seal or stamp")
+    void signaturePreview() throws IOException {
+        String js = read("app.js");
+        int from = js.indexOf("function showPreview()");
+        int to = js.indexOf("function approverLine()");
+        assertThat(from).isPositive();
+        assertThat(to).isGreaterThan(from);
+        String preview = js.substring(from, to);
+        assertThat(preview).contains("Proposed with the agent's key").contains("Approved with a different key")
+                .contains("One key proposes. A different key decides. Nkap refuses when it is the same key.")
+                .doesNotContain("button").doesNotContain("seal").doesNotContain("stamp");
+        assertThat(js).containsPattern("\\n\\s*showPreview\\(\\);");
+        assertThat(js).contains("Nothing has run yet. Choose a case and press Run, or open a past run.");
+        assertThat(js).as("a run or a recording clears the preview").containsPattern("function clearSlip\\(\\)\\s*\\{[^}]*signatures\\.replaceChildren\\(\\)");
+    }
+
+    @Test
+    @DisplayName("the stamp reads Refused with the code under it, and its scale-in exists only where motion is allowed")
+    void stamp() throws IOException {
+        String js = read("app.js");
+        String css = read("app.css");
+        assertThat(js).contains("'stamp-word', 'Refused'").contains("'stamp-code', code");
+        assertThat(css).containsPattern("\\.stamp\\s*\\{[^}]*border:\\s*\\.3rem double");
+        String allowed = block(css, "@media (prefers-reduced-motion: no-preference)");
+        assertThat(allowed).containsPattern("\\.stamp\\s*\\{[^}]*animation:");
+        assertThat(css.replace(allowed, "")).doesNotContain("land");
+    }
+
+    @Test
+    @DisplayName("in the source the controls come first, then the slip, then the past runs, the order a phone shows; no CSS reorders them")
+    void sourceOrderIsVisualOrder() throws IOException {
+        String html = read("index.html");
+        int controls = html.indexOf("id=\"controls\"");
+        int slip = html.indexOf("id=\"slip\"");
+        int past = html.indexOf("id=\"past\"");
+        assertThat(controls).isPositive();
+        assertThat(slip).isGreaterThan(controls);
+        assertThat(past).isGreaterThan(slip);
+        assertThat(read("app.css")).doesNotContainPattern("(?<![\\w-])order\\s*:").doesNotContain("display: contents");
+    }
+
+    @Test
+    @DisplayName("a past run names its outcome in plain words and keeps \"did not match\"")
+    void pastRunLabels() throws IOException {
+        String js = read("app.js");
+        assertThat(js).contains("toLowerCase().replace(/_/g, ' ')").contains("did not match");
+        assertThat(js).doesNotContain("r.id + ' (' + r.outcome");
+    }
 }
