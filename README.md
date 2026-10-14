@@ -323,7 +323,7 @@ loop's own bounds. Scripted runs have a budget of their own (200 a day, a 20-sec
 day, 5 minutes). Live is off unless a model key is configured and the model's base URL is https or loopback. A visitor is the socket address; only if
 the peer is the one proxy named in `NKAP_AGENT_TRUSTED_PROXY` is it the last `X-Forwarded-For` entry, and no other header is read. Every response has
 `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none';
-frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`, and `Cache-Control: no-store` on `/api/*` and on errors. A
+frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`, and `Cache-Control: no-store` on every response, the page, its script and its style included, so that no cache in front of the service can keep an old file. A
 request line the JDK server itself rejects as malformed (for instance a path of `//`) is answered by the JDK before this code, and without these headers.
 The log holds the method, the route shape and the status: no address, no body, no id, no model text.
 
