@@ -361,7 +361,8 @@ async function start() {
   const list = await get('/api/recordings');
   const seen = new Set();
   (list.body || []).forEach((r) => {
-    const button = el('button', null, r.id + ' (' + r.outcome + (r.matched ? '' : ', did not match') + ')');
+    const outcome = String(r.outcome).toLowerCase().replace(/_/g, ' ');
+    const button = el('button', null, r.id + ' (' + outcome + (r.matched ? '' : ', did not match') + ')');
     button.type = 'button';
     button.addEventListener('click', () => loadRecording(r.id));
     recordings.appendChild(button);
@@ -372,6 +373,7 @@ async function start() {
       caseSelect.appendChild(option);
     }
   });
+  showPreview();
   refreshStatus();
 }
 
