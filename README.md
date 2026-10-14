@@ -276,6 +276,11 @@ call it is not built yet.
 new dependency). Start it with `java -cp ... dev.nkap.agent.web.AgentService`; `scripts/verify-web.sh` does so against a
 throwaway seeded stack.
 
+The page is built as a till slip: a dark counter holds the controls and the past runs, and each run prints onto a paper slip with two
+signature lines, one for the key that proposed and one for the different key that approves. On a phone the slip follows the controls and
+is scrolled into view when a run starts; from 60rem wide the controls sit on the left and the slip on the right. Its style is one file
+with system fonts only, and its motion stops under `prefers-reduced-motion`.
+
 ### Routes (nothing else exists)
 
 | Route | What it does |

@@ -96,4 +96,150 @@ class PageTest {
         assertThat(selfButton).isPositive();
         assertThat(js).as("a refused attempt does not disable the buttons for good").contains("reply.body.result === 'decided'");
     }
+
+    /** The text between the parenthesis that opens at {@code open} and its match. */
+    private static String balanced(String text, int open) {
+        int depth = 0;
+        for (int i = open; i < text.length(); i++) {
+            if (text.charAt(i) == '(') {
+                depth++;
+            } else if (text.charAt(i) == ')' && --depth == 0) {
+                return text.substring(open, i + 1);
+            }
+        }
+        throw new IllegalStateException("unbalanced parenthesis");
+    }
+
+    /** The text of the block that opens at the first brace after {@code header}. */
+    private static String block(String css, String header) {
+        int start = css.indexOf(header);
+        assertThat(start).as(header).isNotNegative();
+        int open = css.indexOf('{', start);
+        int depth = 0;
+        for (int i = open; i < css.length(); i++) {
+            if (css.charAt(i) == '{') {
+                depth++;
+            } else if (css.charAt(i) == '}' && --depth == 0) {
+                return css.substring(open + 1, i);
+            }
+        }
+        throw new IllegalStateException("unbalanced brace");
+    }
+
+    @Test
+    @DisplayName("the style holds no font file and no url(), and every animation lives in the reduced-motion block or is switched off by it")
+    void styleHasNoFontsAndNoUncheckedMotion() throws IOException {
+        String css = read("app.css");
+        assertThat(css).doesNotContain("@font-face").doesNotContain("url(");
+        assertThat(css).contains("prefers-reduced-motion: reduce").contains("prefers-reduced-motion: no-preference");
+        String allowed = block(css, "@media (prefers-reduced-motion: no-preference)");
+        assertThat(allowed).contains("@keyframes").contains("animation:");
+        assertThat(css.replace(allowed, "")).as("no animation or keyframes outside the no-preference block").doesNotContain("@keyframes")
+                .doesNotContainPattern("animation(-name)?\\s*:\\s*(?!none)[a-z]");
+        assertThat(block(css, "@media (prefers-reduced-motion: reduce)")).containsPattern("animation:\\s*none");
+    }
+
+    @Test
+    @DisplayName("the working state says what is happening in each mode, is a status region, and the buttons keep their texts")
+    void workingState() throws IOException {
+        String js = read("app.js");
+        assertThat(js).contains("Running the real checks.").contains("The model is working. A live run takes about 15 seconds.");
+        assertThat(js).contains("setAttribute('role', 'status')");
+        assertThat(js).contains("'Running'").containsPattern("button\\.disabled\\s*=\\s*true");
+        assertThat(js).contains("Try again in about");
+    }
+
+    @Test
+    @DisplayName("the only setInterval is the local counter, it is cleared in a finally, and no timer calls the service")
+    void timers() throws IOException {
+        String js = read("app.js");
+        Matcher intervals = Pattern.compile("setInterval\\(").matcher(js);
+        int count = 0;
+        while (intervals.find()) {
+            count++;
+            String call = balanced(js, intervals.end() - 1);
+            assertThat(call).as("the counter only writes the elapsed text").contains("elapsed.textContent")
+                    .doesNotContainPattern("\\b(fetch|get|post|refreshStatus|runCase|loadRecording)\\s*\\(");
+        }
+        assertThat(count).isEqualTo(1);
+        assertThat(js).containsPattern("finally\\s*\\{[^}]*clearInterval\\(");
+        Matcher timeouts = Pattern.compile("setTimeout\\(").matcher(js);
+        int sleeps = 0;
+        while (timeouts.find()) {
+            sleeps++;
+            assertThat(balanced(js, timeouts.end() - 1)).as("the replay delay only resolves a promise")
+                    .doesNotContainPattern("\\b(fetch|get|post|refreshStatus)\\s*\\(");
+        }
+        assertThat(sleeps).as("the replay delay is the only timeout").isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("the page has its landmarks, the two-option mode group, the metadata and the focusable slip")
+    void structure() throws IOException {
+        String html = read("index.html");
+        assertThat(html).contains("<header").contains("<main").contains("<fieldset").contains("<legend>Mode</legend>")
+                .containsPattern("type=\"radio\"[^>]*value=\"scripted\"").containsPattern("type=\"radio\"[^>]*value=\"live\"")
+                .contains("name=\"description\"").contains("name=\"theme-color\" content=\"#0E2B25\"")
+                .containsPattern("<section[^>]*id=\"slip\"[^>]*tabindex=\"-1\"[^>]*aria-labelledby=\"slip-title\"")
+                .doesNotContain("autofocus");
+        assertThat(html).containsPattern("<select id=\"case\"");
+    }
+
+    @Test
+    @DisplayName("the mode segments show their focus ring on the visible segment, since the radio input itself is transparent")
+    void segmentFocusRing() throws IOException {
+        String css = read("app.css");
+        assertThat(css).containsPattern("\\.segment input\\s*\\{[^}]*opacity:\\s*0");
+        assertThat(css).containsPattern("\\.segment input:focus-visible \\+ span\\s*\\{[^}]*outline:\\s*3px solid[^}]*outline-offset:\\s*3px");
+    }
+
+    @Test
+    @DisplayName("before any run the slip prints the two signature lines empty with their sentence, as a preview that holds no button, seal or stamp")
+    void signaturePreview() throws IOException {
+        String js = read("app.js");
+        int from = js.indexOf("function showPreview()");
+        int to = js.indexOf("function approverLine()");
+        assertThat(from).isPositive();
+        assertThat(to).isGreaterThan(from);
+        String preview = js.substring(from, to);
+        assertThat(preview).contains("Proposed with the agent's key").contains("Approved with a different key")
+                .contains("One key proposes. A different key decides. Nkap refuses when it is the same key.")
+                .doesNotContain("button").doesNotContain("seal").doesNotContain("stamp");
+        assertThat(js).containsPattern("\\n\\s*showPreview\\(\\);");
+        assertThat(js).contains("Nothing has run yet. Choose a case and press Run, or open a past run.");
+        assertThat(js).as("a run or a recording clears the preview").containsPattern("function clearSlip\\(\\)\\s*\\{[^}]*signatures\\.replaceChildren\\(\\)");
+    }
+
+    @Test
+    @DisplayName("the stamp reads Refused with the code under it, and its scale-in exists only where motion is allowed")
+    void stamp() throws IOException {
+        String js = read("app.js");
+        String css = read("app.css");
+        assertThat(js).contains("'stamp-word', 'Refused'").contains("'stamp-code', code");
+        assertThat(css).containsPattern("\\.stamp\\s*\\{[^}]*border:\\s*\\.3rem double");
+        String allowed = block(css, "@media (prefers-reduced-motion: no-preference)");
+        assertThat(allowed).containsPattern("\\.stamp\\s*\\{[^}]*animation:");
+        assertThat(css.replace(allowed, "")).doesNotContain("land");
+    }
+
+    @Test
+    @DisplayName("in the source the controls come first, then the slip, then the past runs, the order a phone shows; no CSS reorders them")
+    void sourceOrderIsVisualOrder() throws IOException {
+        String html = read("index.html");
+        int controls = html.indexOf("id=\"controls\"");
+        int slip = html.indexOf("id=\"slip\"");
+        int past = html.indexOf("id=\"past\"");
+        assertThat(controls).isPositive();
+        assertThat(slip).isGreaterThan(controls);
+        assertThat(past).isGreaterThan(slip);
+        assertThat(read("app.css")).doesNotContainPattern("(?<![\\w-])order\\s*:").doesNotContain("display: contents");
+    }
+
+    @Test
+    @DisplayName("a past run names its outcome in plain words and keeps \"did not match\"")
+    void pastRunLabels() throws IOException {
+        String js = read("app.js");
+        assertThat(js).contains("toLowerCase().replace(/_/g, ' ')").contains("did not match");
+        assertThat(js).doesNotContain("r.id + ' (' + r.outcome");
+    }
 }

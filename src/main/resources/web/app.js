@@ -8,6 +8,14 @@ const LABELS = {
   live: 'LIVE: a real model, under a daily budget'
 };
 const SHORT = { recording: 'RECORDING', scripted: 'SCRIPTED ANSWERS, NOT A MODEL', live: 'LIVE' };
+const MODE_HELP = {
+  scripted: 'The real loop, checks, tools and Nkap run, with answers written in advance instead of a model. Costs nothing.',
+  live: 'The real model runs, if the budget allows. It can get things wrong, which is what the checks are for.'
+};
+const WORKING = {
+  scripted: 'Running the real checks.',
+  live: 'The model is working. A live run takes about 15 seconds.'
+};
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -38,8 +46,29 @@ async function post(path, payload) {
   return { status: response.status, body: await response.json() };
 }
 
-const app = document.getElementById('app');
 const state = { playing: 0 };
+const slip = document.getElementById('slip');
+const slipTitle = document.getElementById('slip-title');
+const working = document.getElementById('working');
+const trace = document.getElementById('trace');
+const signatures = document.getElementById('signatures');
+const decisionArea = document.getElementById('decision');
+const statusLine = document.getElementById('status');
+let skip = false;
+
+working.setAttribute('role', 'status');
+
+function reduceMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function reveal(node, block) {
+  node.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: block || 'start' });
+}
+
+function endOfRun() {
+  slipTitle.focus({ preventScroll: true });
+}
 
 function badge(mode) {
   return el('span', 'badge mode-' + mode, SHORT[mode] || mode);
@@ -103,12 +132,6 @@ function stepView(step) {
   return box;
 }
 
-const trace = el('div');
-trace.id = 'trace';
-const decisionArea = el('div');
-const status = el('p', 'small');
-let skip = false;
-
 async function show(steps, mode, animate) {
   state.playing += 1;
   const mine = state.playing;
@@ -120,13 +143,70 @@ async function show(steps, mode, animate) {
     trace.appendChild(stepView(step));
   }
 }
-
-function showError(body, status) {
-  const text = body && body.text ? body.text : 'The request was refused (status ' + status + ').';
+function showError(body, httpStatus) {
+  const text = body && body.text ? body.text : 'The request was refused (status ' + httpStatus + '). Wait a moment, then press Run again.';
   trace.replaceChildren(el('p', 'error', text));
   if (body && body.retryAfterSeconds) {
     trace.appendChild(el('p', 'small', 'Try again in about ' + body.retryAfterSeconds + ' seconds.'));
   }
+}
+
+// The two signature lines at the foot of the slip. The first is filled once Nkap recorded a proposal; the second stays
+// empty until the approver's key decides, or carries a stamp when Nkap refuses.
+function showSignatures() {
+  const proposed = el('div', 'sign sign-filled');
+  proposed.appendChild(el('p', 'sign-name', "Proposed with the agent's key"));
+  proposed.appendChild(el('p', 'sign-state', 'Nkap recorded the proposal. It is pending.'));
+  const approved = el('div', 'sign sign-empty');
+  approved.id = 'approver-line';
+  approved.appendChild(el('p', 'sign-name', 'Approved with a different key'));
+  approved.appendChild(el('p', 'sign-state', 'Empty until the approver\'s key decides.'));
+  signatures.replaceChildren(proposed, approved);
+  signatures.hidden = false;
+}
+
+// Before any run the slip shows the two lines empty, so the idea is visible on the first screen. It is not a run: no seal,
+// no stamp, no button, and clearSlip removes it when a run or a recording starts.
+function showPreview() {
+  const lines = ["Proposed with the agent's key", 'Approved with a different key'].map((name) => {
+    const line = el('div', 'sign sign-empty');
+    line.appendChild(el('p', 'sign-name', name));
+    return line;
+  });
+  signatures.replaceChildren(lines[0], lines[1],
+    el('p', 'preview-line', 'One key proposes. A different key decides. Nkap refuses when it is the same key.'));
+  signatures.hidden = false;
+}
+
+function approverLine() {
+  return document.getElementById('approver-line');
+}
+
+function clearMarks(line) {
+  line.querySelectorAll('.stamp, .seal').forEach((node) => node.remove());
+}
+
+function sealApproverLine(ledgerEntryId) {
+  const line = approverLine();
+  if (!line) { return; }
+  clearMarks(line);
+  line.className = 'sign sign-sealed';
+  const seal = el('div', 'seal');
+  seal.appendChild(el('span', 'seal-word', 'Approved'));
+  line.appendChild(seal);
+  line.querySelector('.sign-state').textContent = 'Ledger entry ' + ledgerEntryId;
+}
+
+function stampApproverLine(code) {
+  const line = approverLine();
+  if (!line) { return; }
+  clearMarks(line);
+  line.className = 'sign sign-empty sign-refused';
+  line.querySelector('.sign-state').textContent = 'Not signed. Nkap refused.';
+  const stamp = el('div', 'stamp');
+  stamp.appendChild(el('span', 'stamp-word', 'Refused'));
+  stamp.appendChild(el('span', 'stamp-code', code));
+  line.appendChild(stamp);
 }
 
 function decisionView(result) {
@@ -144,22 +224,34 @@ async function decide(run, kind, buttons) {
   const reply = await post('/api/runs/' + run.runId + '/' + kind, {});
   if (reply.status === 200) {
     decisionArea.appendChild(decisionView(reply.body));
-    if (reply.body.result === 'decided') { return; }
+    if (reply.body.result === 'decided') {
+      sealApproverLine(reply.body.ledgerEntryId);
+      reveal(signatures, 'nearest');
+      return;
+    }
     // Nkap refused: the run is still open for a few attempts, so the buttons come back.
+    stampApproverLine(reply.body.code);
+    reveal(signatures, 'nearest');
     if (reply.body.attemptsLeft > 0) {
       decisionArea.appendChild(el('p', 'small', 'This run has ' + reply.body.attemptsLeft + ' more attempt(s).'));
       buttons.forEach((b) => { if (!b.dataset.blocked) { b.disabled = false; } });
     }
     return;
   }
-  decisionArea.appendChild(el('p', 'error', reply.body.text || 'The decision was refused.'));
+  decisionArea.appendChild(el('p', 'error', reply.body.text || 'The decision was refused. Press the button again, or run the case again.'));
+  if ((reply.status === 409 || reply.status === 403) && reply.body.error) {
+    stampApproverLine(reply.body.error);
+  }
   if (reply.status === 409 && reply.body.error === 'payment-already-approved') {
     buttons.forEach((b) => { if (b.dataset.kind === 'approve') { b.dataset.blocked = 'yes'; } else { b.disabled = false; } });
   }
+  reveal(signatures, 'nearest');
 }
 
 function proposalView(run) {
   decisionArea.replaceChildren();
+  signatures.replaceChildren();
+  signatures.hidden = true;
   const proposal = run.proposal || { status: 'none' };
   if (proposal.status === 'refused') {
     decisionArea.appendChild(el('p', 'refused', 'Nkap refused the proposal (' + proposal.code + '): ' + proposal.text));
@@ -167,9 +259,10 @@ function proposalView(run) {
     decisionArea.appendChild(el('p', null, 'The run proposed nothing, so there is nothing to approve.'));
   }
   if (run.runId) {
+    showSignatures();
     decisionArea.appendChild(el('p', null, 'Nkap recorded the proposal. It is pending, and a different key has to decide it.'));
     const row = el('div', 'row');
-    const approve = el('button', null, "Approve with the approver's key");
+    const approve = el('button', 'approve', "Approve with the approver's key");
     const selfApprove = el('button', null, "Try to approve with the agent's own key");
     approve.type = 'button';
     selfApprove.type = 'button';
@@ -190,30 +283,71 @@ function proposalView(run) {
   }
 }
 
-async function loadRecording(id) {
+function clearSlip() {
   decisionArea.replaceChildren();
+  signatures.replaceChildren();
+  signatures.hidden = true;
+}
+
+async function loadRecording(id) {
+  clearSlip();
+  reveal(slip);
   const reply = await get('/api/recordings/' + encodeURIComponent(id));
-  if (reply.status !== 200) { showError(reply.body, reply.status); return; }
+  if (reply.status !== 200) { showError(reply.body, reply.status); endOfRun(); return; }
   const p = reply.body.provenance;
   const info = el('p', 'small', 'Recorded ' + p.date + ' with ' + p.model + ': run ' + p.run + ' of ' + p.runs + ' of the case ' + p.case +
     ', ' + (p.matched ? 'matched' : 'did not match') + ' the catalogue. Cost ' + p.costUsd + ' USD.');
   await show(reply.body.steps, 'recording', true);
   trace.appendChild(info);
+  endOfRun();
+}
+
+function workingView(mode) {
+  const elapsed = el('p', 'elapsed', 'Elapsed: 0 s');
+  elapsed.setAttribute('aria-hidden', 'true');
+  const bar = el('div', 'bar');
+  bar.setAttribute('aria-hidden', 'true');
+  bar.appendChild(el('span'));
+  working.replaceChildren(el('p', 'working-text', WORKING[mode] || WORKING.scripted), elapsed, bar);
+  return elapsed;
 }
 
 async function runCase(caseId, mode, button) {
   button.disabled = true;
-  decisionArea.replaceChildren();
-  trace.replaceChildren(banner(mode), el('p', 'small', 'Running...'));
+  button.textContent = 'Running';
+  clearSlip();
+  trace.replaceChildren(banner(mode));
+  const elapsed = workingView(mode);
+  reveal(slip);
+  let seconds = 0;
+  const counter = setInterval(() => {
+    seconds += 1;
+    elapsed.textContent = 'Elapsed: ' + seconds + ' s';
+  }, 1000);
   try {
-    const reply = await post('/api/runs', { case: caseId, mode: mode });
+    let reply = null;
+    try {
+      reply = await post('/api/runs', { case: caseId, mode: mode });
+    } catch (failure) {
+      reply = null;
+    } finally {
+      clearInterval(counter);
+      working.replaceChildren();
+    }
+    if (reply === null) {
+      trace.replaceChildren(el('p', 'error', 'The request did not reach the service, or its answer could not be read. Check your connection, then press Run again.'));
+      return;
+    }
     if (reply.status !== 200) { showError(reply.body, reply.status); return; }
     const run = reply.body;
     await show(run.steps, run.mode, true);
     trace.appendChild(el('p', 'small', 'Matched the catalogue: ' + (run.matched ? 'yes' : 'no') + ' (' + run.judgement + ').'));
     proposalView(run);
+    if (run.runId) { reveal(signatures); }
   } finally {
     button.disabled = false;
+    button.textContent = 'Run';
+    endOfRun();
     refreshStatus();
   }
 }
@@ -221,61 +355,31 @@ async function runCase(caseId, mode, button) {
 async function refreshStatus() {
   const reply = await get('/api/status');
   if (reply.status !== 200) { return; }
-  status.textContent = reply.body.liveEnabled
+  statusLine.textContent = reply.body.liveEnabled
     ? 'Live runs left today: ' + reply.body.liveRunsLeftToday + '.'
     : 'Live runs are off on this deployment.';
 }
 
-function modeCards() {
-  const list = el('ul', 'modes');
-  [['recording', 'A file of a past run is played back. Nothing runs.'],
-   ['scripted', 'The real loop, checks, tools and Nkap run, with answers written in advance instead of a model. Costs nothing.'],
-   ['live', 'The real model runs, if the budget allows. It can get things wrong, which is what the checks are for.']]
-    .forEach(([mode, text]) => {
-      const item = el('li', 'mode-' + mode);
-      item.appendChild(badge(mode));
-      item.appendChild(el('p', null, text));
-      list.appendChild(item);
-    });
-  return list;
-}
-
 async function start() {
-  app.replaceChildren();
-  app.appendChild(el('h1', null, 'Nkap Agent'));
-  app.appendChild(el('p', 'lede', 'An agent that looks into a mobile-money payment and proposes a ledger adjustment. It proposes with one key; a different key has to approve, or Nkap refuses.'));
-  app.appendChild(modeCards());
+  const caseSelect = document.getElementById('case');
+  const run = document.getElementById('run');
+  const recordings = document.getElementById('recordings');
+  const help = document.getElementById('mode-help');
+  const modes = document.querySelectorAll('input[name="mode"]');
+  const chosen = () => Array.from(modes).find((m) => m.checked).value;
+  const explain = () => { help.textContent = MODE_HELP[chosen()]; };
+  modes.forEach((m) => m.addEventListener('change', explain));
+  explain();
 
-  app.appendChild(el('h2', null, 'Watch a recording'));
-  const recordings = el('div', 'row');
-  app.appendChild(recordings);
-
-  app.appendChild(el('h2', null, 'Run it'));
-  const controls = el('div', 'row');
-  const caseSelect = el('select');
-  caseSelect.setAttribute('aria-label', 'Case');
-  const modeSelect = el('select');
-  modeSelect.setAttribute('aria-label', 'Mode');
-  [['scripted', 'Scripted answers'], ['live', 'Live model']].forEach(([value, label]) => {
-    const option = el('option', null, label);
-    option.value = value;
-    modeSelect.appendChild(option);
-  });
-  const run = el('button', null, 'Run');
-  run.type = 'button';
-  controls.appendChild(caseSelect);
-  controls.appendChild(modeSelect);
-  controls.appendChild(run);
-  app.appendChild(controls);
-  app.appendChild(status);
-  app.appendChild(trace);
-  app.appendChild(decisionArea);
-  run.addEventListener('click', () => runCase(caseSelect.value, modeSelect.value, run));
+  trace.appendChild(el('p', 'empty', 'Nothing has run yet. Choose a case and press Run, or open a past run.'));
+  showPreview();
+  run.addEventListener('click', () => runCase(caseSelect.value, chosen(), run));
 
   const list = await get('/api/recordings');
   const seen = new Set();
   (list.body || []).forEach((r) => {
-    const button = el('button', null, r.id + ' (' + r.outcome + (r.matched ? '' : ', did not match') + ')');
+    const outcome = String(r.outcome).toLowerCase().replace(/_/g, ' ');
+    const button = el('button', null, r.id + ' (' + outcome + (r.matched ? '' : ', did not match') + ')');
     button.type = 'button';
     button.addEventListener('click', () => loadRecording(r.id));
     recordings.appendChild(button);
