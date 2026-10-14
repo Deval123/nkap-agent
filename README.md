@@ -1,14 +1,142 @@
 # Nkap Agent
 
-An agent that works alongside [Nkap](https://github.com/Deval123/nkap), the open mobile
-money gateway. It lives in its own repository so that nothing of it is merged into the
-gateway and it can be removed without touching Nkap.
+An agent that looks into a mobile-money payment that does not match the ledger and may only propose the correction.
+A different key has to approve it, and [Nkap](https://github.com/Deval123/nkap), the open mobile-money gateway,
+refuses when the same key tries both. Built on NVIDIA Nemotron through Nebius Token Factory.
 
-**Status: under construction.** The loop exists and has been tested only against a scripted fake model and a
-fake gateway; it sends nothing to Nkap, and there is no approval client, page or deployment yet. This
-repository currently holds the build, the working conventions, the CI, a local demo stack with its seed
-([`docs/demo-stack.md`](docs/demo-stack.md)), the agent's read-only tools, the model behind an interface, and
-the loop with its check of a final answer.
+**Live demo: <https://demo.nkap.dev>.** The page has three modes, each named in words on every step: *recording* (a
+published run played back from a file, no model), *scripted answers, not a model* (the real tools, validator and Nkap,
+with the expected answer of each test case instead of a model) and *live* (the model, under a daily budget).
+
+Contents: [The idea](#the-idea) · [Nemotron on Token Factory](#built-on-nvidia-nemotron-through-nebius-token-factory) · [Results](#results)
+· [Try it](#try-it) · [What is new](#what-is-new-in-this-submission) · [Security](#security-in-five-lines-and-the-named-weaknesses) · [Design notes](#design-notes)
+
+## The idea
+
+A payment, the operator's statement and the ledger disagree. The agent reads them with four read-only tools, names one of Nkap's
+hypotheses (a cause such as an unrecorded fee or a duplicate posting) or declines, and **proposes** a ledger entry that corrects it. It cannot approve it.
+
+```mermaid
+flowchart LR
+  subgraph repo["This repository"]
+    M["Nemotron on Token Factory<br/>one strict JSON answer per turn"]
+    H["Harness: loop, four read-only tools, strict parser"]
+    V["Validator: fixed rules, no model"]
+    M -->|"call a tool, or a final answer"| H
+    H -->|"tool results, marked untrusted"| M
+    H -->|"final answer"| V
+  end
+  V -->|"checked proposal, sent with the agent's key"| N[("Nkap: proposal, pending")]
+  A["Approver, with a different key"] -->|"approve or reject"| N
+  N -.->|"same key as the proposer: refused"| X["Refusal"]
+```
+
+The validator checks the accounts and the currency, that the postings balance and stay under the amount ceiling, that the entry is
+the hypothesis's, and that every cited value resolves in the recorded trace and contains the entry's amount. It does
+**not** check that the hypothesis is true. A well-formed but wrong proposal passes the validator; the person who
+approves, and the different key that approval needs, are the last check.
+
+## Built on NVIDIA Nemotron through Nebius Token Factory
+
+- **Model:** `nvidia/nemotron-3-super-120b-a12b` (`RunCli.DEFAULT_MODEL`; every file in `demo/traces/` records it in
+  `provenance.model`). Endpoint: Token Factory's OpenAI-compatible `chat/completions` at
+  `https://api.tokenfactory.nebius.com/v1/`, with a Bearer key from `NEBIUS_API_KEY`.
+- **What the code relies on:** `response_format` of type `json_schema` in strict mode (`AnswerSchema`); the `usage` field,
+  without which a call is a failure (`NebiusModel`); and the fact that reasoning tokens are billed as completion tokens, so
+  `max_tokens` is 6000 in the loop (at 500, 3 of 3 requests were cut off with no answer).
+- **What was measured**, by the maintainer, on 2026-10-13: 42 requests with `scripts/model-spike.sh`, then three runs of
+  the six cases, 18 runs each time. In the second run: 67 calls, 118,122 prompt and 27,392 completion tokens, about 0.060
+  USD; the slowest call 10.2 s, runs of 4.4 to 16.4 s. In the seven published traces a run costs 0.0021 to 0.0053 USD.
+  Sources and longer notes: [`docs/nebius-feedback.md`](docs/nebius-feedback.md), [`demo/README.md`](demo/README.md).
+- **Prices:** USD 0.30 per million input tokens and 0.90 per million output tokens are the defaults of the runner
+  (`RunCli`) and of the trace export. This repository does not record the date at which Token Factory listed them, so they
+  are the rates assumed, not quoted.
+- **The model is never trusted.** Its answer is parsed strictly, and the fields an action does not use are ignored. It
+  cites evidence as `(call id, JSON path)` pointers and the harness reads the value from the trace, so its rendering of a
+  value is never what is checked. Tool results are wrapped as untrusted text. The provider enforces the shape of the schema
+  and not the coupling between fields (measured), which is why the parser does.
+
+## Results
+
+Six test cases, the catalogue ([`docs/scenario-catalogue.md`](docs/scenario-catalogue.md)), each run 3 times by the maintainer on
+2026-10-13. A run matches when its outcome, and for a proposal its hypothesis and entry, are the catalogue's.
+
+| Run | Matched | Calls | Tokens (prompt / completion) |
+| --- | --- | --- | --- |
+| First | 10 of 18 | 67 | 101,887 / 36,321 |
+| Second, after adding a tool that shows the statement lines, with their fees | 17 of 18 | 67 | 118,122 / 27,392 |
+
+In the second run five cases matched 3 of 3 and `duplicate-posting` 2 of 3 (one run ended `REJECTED`, for an account that is
+not allowed). The first run failed on the two cases whose amount is a fee, because the fee was not in what the tools
+returned. The prompt was changed after reading the first run, so the six cases fit it: **a demonstration set, not a
+benchmark**, and 18 runs of one model say little about other payments. An intermediate run between the two matched 11 of 18.
+
+What the scripted run proves: the tools, the validator and the seed work together, and each case has an answer they
+accept (6 of 6, one run each, against a real seeded stack). No model took part. It does not say what a model will do.
+
+## Try it
+
+**Online:** open <https://demo.nkap.dev>. No setup: pick a case and a mode, press Run, then approve, or try the agent's own key.
+
+**Locally, scripted mode** (no model, no key, nothing sent to Nebius). Needs Java 21, Maven, Docker with Compose, `jq` 1.6
+or later, `openssl`, and GNU or BSD `stat`. The first seed builds Nkap from the commit pinned in `compose.yaml` and takes
+several minutes.
+
+```bash
+SEED_COMPOSE_EXTRA="$PWD/compose.dev.yaml" scripts/seed.sh    # Nkap on 127.0.0.1:8080, six cases seeded
+mvn -B -q compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
+export NKAP_AGENT_KEY="$(sed -n 's/^NKAP_AGENT_KEY=//p' seed-keys.env)"
+export NKAP_APPROVER_KEY="$(sed -n 's/^NKAP_APPROVER_KEY=//p' seed-keys.env)"
+export NKAP_AGENT_SALT="$(openssl rand -hex 24)" NKAP_AGENT_MANIFEST=seed-manifest.json NKAP_AGENT_STATE_DIR=target/state
+java -cp "target/classes:$(cat target/classpath.txt)" dev.nkap.agent.web.AgentService   # http://127.0.0.1:8088
+docker compose -p nkap-agent-demo down -v                     # when done
+```
+
+The seed writes `seed-keys.env`, `seed-manifest.json` and `statements/`, which git ignores. Build and tests: `mvn -B clean
+verify` (412 tests). More: [the service](#the-service), [`docs/demo-stack.md`](docs/demo-stack.md).
+
+**Live, with your own Nebius key:** set `NEBIUS_API_KEY` (or `NEBIUS_API_KEY_FILE`, a file outside this repository) before
+starting the service; `NEBIUS_MODEL` defaults to `nvidia/nemotron-3-super-120b-a12b`. A run costs about 0.002 to 0.005 USD
+at the rates above, 40 live runs a day at most by default. Never put a key in a file of this repository.
+
+## What is new in this submission
+
+Nkap, the gateway, is a separate repository, created on 2026-09-07. This repository, whose first commit is dated
+2026-10-13, is the agent, the validator, the approval client, the service, the page and the deployment, and it changes
+nothing in Nkap: the stack builds Nkap from a pinned commit, `1cbd8a404490968c961f4b301a815629aab574c8`, merged on
+2026-10-13. That commit is also the one that added the adjustment proposals this agent relies on (`POST /adjustments`, the
+approve and reject routes, and the rule that a second key decides); the published Nkap image, 2.1.0, does not have them.
+The agent also reads `GET /payments/{reference}` and `GET /statements/imports/{importId}`, with two keys: the agent's and a
+non-admin approver's, of the same merchant.
+
+## Security in five lines, and the named weaknesses
+
+1. The model never writes a request: four read-only tools, one client method that can only `GET`, and an allowlist of method and path on each of the two approval clients.
+2. The validator is deterministic and runs on every final answer; a refusal carries no entry.
+3. The proposing key and the approving key are held by different classes, and nothing but the approval command and the service's decision route refers to the approver's.
+4. The page uses `textContent` only, and a content security policy that allows only this service's own files.
+5. Live runs are capped per day and per visitor, and fail closed: no key, no state file, no live run.
+
+Named weaknesses, each with what keeps it harmless and what would end that:
+
+- The **agent's key is an admin key** (webhook replay sends outbound HTTP). Kept harmless by: no published gateway port, no
+  webhook endpoint registered, the clients' allowlists. [Details](#the-weakness-beside-it).
+- **Approval is bound to a key, not a person**, and the demonstration's backend holds both keys: the separation shown is
+  Nkap's server rule, not two machines. [Details](#approval).
+- **Plain `http` on the internal network** between the service and the gateway. Kept harmless by: an internal network with no
+  outbound access, no capabilities on its containers, one accepted host name. [Details](#the-gateway-is-reached-in-clear-text-on-the-internal-network).
+- **Nkap accepts a second adjustment on one payment.** This service does not send it, but an approval made by any other
+  client is not seen. [Details](#one-approved-adjustment-per-payment-a-rule-of-this-service-not-of-nkap).
+- **The validator cannot tell a true hypothesis from a plausible one.** The approver is the last check.
+  [Details](#what-the-validator-checks-and-what-it-does-not).
+
+## Licence
+
+Apache-2.0, see [`LICENSE`](LICENSE). Conventions: [`docs/conventions.md`](docs/conventions.md).
+
+## Design notes
+
+The sections below are the detailed record: what each part does, what is tested, and what is not.
 
 ## What the agent can read
 
@@ -96,8 +224,9 @@ whatever the provider enforces.
 `NebiusModel` makes one request per call, with no retry and no redirect, a bounded `max_tokens` and one
 timeout, and reads at most 256 KB. The key is read from `NEBIUS_API_KEY` for each call and held in no field.
 The reasoning text the provider returns is never read. Tests against a fake server check these points.
-**The code in this repository has only met fakes**: the measurements below come from the maintainer's run of
-`scripts/model-spike.sh`, which needs the key. `scripts/verify-spike.sh` runs that script against a fake.
+The tests use fakes and need no key. The measurements below come from the maintainer's runs against the real model
+(`scripts/model-spike.sh`, then `scripts/run-cases.sh`), which need the key; `scripts/verify-spike.sh` runs the first script
+against a fake. The live demo runs the same client.
 
 ## The loop
 
@@ -184,8 +313,12 @@ robustness:
 **First run of the six cases** (maintainer, 3 runs per case, 18 runs, 67 model calls, about 0.063 USD): 10 of 18
 matched. `money-without-owner`, `injection` and `i-do-not-know` 3 of 3, `duplicate-posting` 1 of 3,
 `unrecorded-fee` and `self-approval` 0 of 3 (the fee is not in the findings). The prompt and the checks above were
-changed after reading those records. **Second run: not made yet**; its place is in
-[`docs/nebius-feedback.md`](docs/nebius-feedback.md). Three runs per case is a very small sample.
+changed after reading those records.
+
+**Second run of the six cases** (after the statement-lines tool, 18 runs, 67 model calls, about 0.060 USD): **17 of 18**
+matched. Every case 3 of 3 except `duplicate-posting`, 2 of 3, where one run ended `REJECTED`. The table, the tokens, the
+slowest call and the list of changes that were in place are in [`docs/nebius-feedback.md`](docs/nebius-feedback.md#second-run-of-the-six-cases-2026-10-13).
+Three runs per case is a very small sample.
 
 ### Running it
 
@@ -267,8 +400,7 @@ does not record it), and that recording predates the repair message that now nam
 5 minutes), both set by the service and not by a visitor. The state is one small file, so a restart does not reset
 it. A visitor is an HMAC of what the service sees of the client, keyed with a secret salt; neither the address nor
 the salt is written or logged. It fails closed: a corrupt or unreadable state file, a missing salt, or a blank
-visitor means no live run, and a corrupt file is left as it was. This is the code only: the HTTP service that would
-call it is not built yet.
+visitor means no live run, and a corrupt file is left as it was. [The service](#the-service) calls it.
 
 ## The service
 
@@ -373,9 +505,9 @@ So **this service applies a rule Nkap does not have**: it does not send `approve
   cannot be asked, the approval is refused (`503 unavailable`), as `LiveBudget` fails closed, and a corrupt file is left as it was.
 - **What it does not cover.** An approval made by anyone else (another client, a script, an operator) is not in the file, so this rule
   does not see it.
-- **No route resets anything.** Resetting the demo ledger is an operator action that is not built yet. When it is, it has to clear this
-  file as well; until then an entry whose adjustment Nkap no longer has is forgotten on the next check, but nothing here deletes
-  Nkap's data or the file.
+- **No route resets anything.** Resetting the demo ledger is an operator action: `scripts/reset-demo.sh` restores the seeded ledger
+  and removes this file (see [`deploy/RUNBOOK.md`](deploy/RUNBOOK.md)). Without it, an entry whose adjustment Nkap no longer has is
+  forgotten on the next check, but nothing in the service deletes Nkap's data or the file.
 
 ### Decisions on a run
 
