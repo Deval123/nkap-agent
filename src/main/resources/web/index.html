@@ -15,7 +15,6 @@
 </header>
 <main id="app">
 <noscript><p class="noscript">This page needs JavaScript to show a run.</p></noscript>
-<div class="side">
 <section id="controls" class="controls" aria-labelledby="controls-title">
 <h2 id="controls-title">Run a case</h2>
 <div class="field">
@@ -31,18 +30,17 @@
 <button id="run" class="primary" type="button">Run</button>
 <p id="status" class="help"></p>
 </section>
-<section id="past" class="past" aria-labelledby="past-title">
-<h2 id="past-title">Past runs</h2>
-<p class="help">Watch a recording. A file of a past run is played back, and nothing runs.</p>
-<div id="recordings" class="recordings"></div>
-</section>
-</div>
 <section id="slip" class="slip" tabindex="-1" aria-labelledby="slip-title">
 <h2 id="slip-title" tabindex="-1">Run slip</h2>
 <div id="working"></div>
 <div id="trace"></div>
 <div id="signatures" class="signatures" hidden></div>
 <div id="decision"></div>
+</section>
+<section id="past" class="past" aria-labelledby="past-title">
+<h2 id="past-title">Past runs</h2>
+<p class="help">Watch a recording. A file of a past run is played back, and nothing runs.</p>
+<div id="recordings" class="recordings"></div>
 </section>
 </main>
 <script src="/app.js"></script>
