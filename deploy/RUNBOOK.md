@@ -127,6 +127,8 @@ export DEMO_SECRETS_DIR=/etc/nkap-agent/secrets DEMO_DATA_DIR=/srv/nkap-agent
 docker compose -f compose.yaml -f deploy/compose.demo.yaml up -d --build --wait
 ```
 
+A redeploy needs no cache purge, because the service sends `Cache-Control: no-store` on every response, the page, `/app.js` and `/app.css` included; if a stale file is ever seen, purge the Cloudflare cache by URL (`/`, `/app.js`, `/app.css`) in the dashboard.
+
 This starts the stack with **live off**. Check the agent from inside (it publishes nothing):
 
 ```bash
