@@ -165,6 +165,19 @@ function showSignatures() {
   signatures.hidden = false;
 }
 
+// Before any run the slip shows the two lines empty, so the idea is visible on the first screen. It is not a run: no seal,
+// no stamp, no button, and clearSlip removes it when a run or a recording starts.
+function showPreview() {
+  const lines = ["Proposed with the agent's key", 'Approved with a different key'].map((name) => {
+    const line = el('div', 'sign sign-empty');
+    line.appendChild(el('p', 'sign-name', name));
+    return line;
+  });
+  signatures.replaceChildren(lines[0], lines[1],
+    el('p', 'preview-line', 'One key proposes. A different key decides. Nkap refuses when it is the same key.'));
+  signatures.hidden = false;
+}
+
 function approverLine() {
   return document.getElementById('approver-line');
 }
@@ -190,7 +203,10 @@ function stampApproverLine(code) {
   clearMarks(line);
   line.className = 'sign sign-empty sign-refused';
   line.querySelector('.sign-state').textContent = 'Not signed. Nkap refused.';
-  line.appendChild(el('div', 'stamp', code));
+  const stamp = el('div', 'stamp');
+  stamp.appendChild(el('span', 'stamp-word', 'Refused'));
+  stamp.appendChild(el('span', 'stamp-code', code));
+  line.appendChild(stamp);
 }
 
 function decisionView(result) {
@@ -356,6 +372,7 @@ async function start() {
   explain();
 
   trace.appendChild(el('p', 'empty', 'Nothing has run yet. Choose a case and press Run, or open a past run.'));
+  showPreview();
   run.addEventListener('click', () => runCase(caseSelect.value, chosen(), run));
 
   const list = await get('/api/recordings');
@@ -373,7 +390,6 @@ async function start() {
       caseSelect.appendChild(option);
     }
   });
-  showPreview();
   refreshStatus();
 }
 

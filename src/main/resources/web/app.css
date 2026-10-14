@@ -92,10 +92,13 @@ button:disabled { opacity: .55; cursor: default; }
 .sign-filled { border-bottom: 3px solid var(--ink); }
 .sign-sealed { border-bottom: 3px solid var(--brass); }
 .sign-sealed .sign-state { font-family: var(--mono); color: var(--ink); overflow-wrap: anywhere; }
-.sign-sealed { padding-right: 5.75rem; }
-.seal { position: absolute; right: 0; top: .9rem; width: 5rem; height: 5rem; display: grid; place-items: center; border-radius: 50%; background: var(--brass); color: var(--ink); border: .25rem double var(--ink); font-weight: 700; font-size: .8rem; transform: rotate(-6deg); }
+.sign-sealed { padding-right: 7rem; }
+.seal { position: absolute; right: 0; top: .5rem; width: 6rem; height: 6rem; display: grid; place-items: center; border-radius: 50%; background: var(--brass); color: var(--ink); border: .3rem double var(--ink); font-weight: 700; font-size: 1rem; transform: rotate(-6deg); }
 .sign-refused { padding-bottom: .5rem; }
-.stamp { display: block; width: fit-content; max-width: 100%; margin: .25rem 0 .5rem auto; padding: .15rem .6rem; border: .2rem solid var(--stamp); border-radius: .25rem; color: var(--stamp); background: var(--slip); font: 700 .95rem/1.3 var(--mono); overflow-wrap: anywhere; transform: rotate(-3deg); }
+.stamp { display: block; width: fit-content; max-width: 100%; margin: .5rem 0 .75rem auto; padding: .35rem .9rem .45rem; border: .3rem double var(--stamp); border-radius: .3rem; color: var(--stamp); background: var(--slip); text-align: center; transform: rotate(-3deg); }
+.stamp-word { display: block; font: 700 1.9rem/1.1 var(--serif); }
+.stamp-code { display: block; font: 700 .9rem/1.3 var(--mono); overflow-wrap: anywhere; }
+.preview-line { margin: .25rem 0 0; color: var(--muted); }
 .decision { padding: .25rem 0; }
 .row { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
 
