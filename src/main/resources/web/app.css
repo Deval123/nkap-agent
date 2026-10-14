@@ -41,6 +41,8 @@ legend { grid-column: 1 / -1; }
 .segment span { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; padding: .25rem .5rem; text-align: center; color: var(--slip); border: 2px solid var(--slip); }
 .segment:first-of-type span { border-radius: .25rem 0 0 .25rem; }
 .segment:last-of-type span { border-radius: 0 .25rem .25rem 0; margin-left: -2px; }
+.segment input:focus-visible { outline: none; }
+.segment input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 3px; }
 .segment input:checked + span { background: var(--slip); color: var(--ink); font-weight: 700; }
 
 button { font: inherit; min-height: 2.75rem; padding: .5rem 1rem; color: var(--ink); background: var(--slip); border: 2px solid var(--slip); border-radius: .25rem; cursor: pointer; text-align: left; }
